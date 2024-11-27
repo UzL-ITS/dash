@@ -1,0 +1,79 @@
+# Ignore all
+*
+# Unignore all with extensions
+!*.*
+# Unignore all dirs
+!*/
+# Unignore Mafiles
+!Makefile
+# Unignore LICENSE
+!LICENSE
+
+# Generated SGX proxy functions
+*_u.c
+*_u.h
+*_t.c
+*_t.h
+
+.config_HW_DEBUG_x64
+.config_HW_PRERELEASE_x64
+.config_SIM_DEBUG_x64
+*.log
+
+*.so
+*.o
+*.d
+
+*/wandb
+**/*.ipynb_checkpoints/
+
+# ONNX Protobufs Sources
+onnx.proto3.pb.cc
+onnx.proto3.pb.h
+
+# Model files
+*.onnx
+!dash/models/*.onnx
+!dash/test/fixtures/*.onnx
+
+# Data
+*.txt
+*.bin
+*.html
+*.meta
+*.JPEG
+*.gz
+*.csv
+*.png
+*.pdf
+
+# Python and weighst & biases
+*.swp
+.python-version
+wandb
+wandb-debug.log
+__pycache__
+.ipynb_checkpoints
+logs
+summary*
+#run*
+
+# Mac OS dust
+.DS_Store
+
+# VS Code
+.vscode
+
+# Profiling
+gmon.out
+
+# Buffer to collect model insights in weight and biases
+insight_buffer.json
+
+# Enclave includes
+**/Enclave/include
+
+# onnx proto
+dash/onnx/onnx.proto3
+
+private_key.pem
