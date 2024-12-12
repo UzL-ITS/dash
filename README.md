@@ -24,7 +24,7 @@ With the following software:
 We used Python 3.9.10 with the dependencies from the `requirements.txt` installed to train the models and run the notebooks.
 
 ## Building and Running Dash
-1. Copy the files from the following directory to the enclave includes:
+1. Copy the files from the following directory to the enclave includes (be aware, we used the gcc version 9.4.0 and your path may differ):
 ```bash
 mkdir -p sgx/Enclave/include/intrinsics
 cp -r /usr/lib/gcc/x86_64-linux-gnu/9/include/* sgx/Enclave/include/intrinsics
@@ -42,7 +42,7 @@ openssl genrsa -3 3072 > sgx/Enclave/private_key.pem
 
 openssl genrsa -3 3072 > benchmarks/model_benchmarks/sgx/Enclave/private_key.pem
 ```
-4. Download the datasets running the script `./data/download`.
+4. To download the datasets run `cd data` and `.download.sh`.
 5. To train the models from the paper or visualize the benchmark results run the corresponding notebooks in the `models` and `benchmarks` folder.
 6. To run the example or the benchmarks change to the corresponding directory, run the Makefile `make release` and execute the binary `./main`. If you want to run an example with SGX, use `make SGX_PRERELEASE=1 SGX_DEBUG=0`to build the SGX enclave and the binary. The results can be visusalized with evaluation.ipynb in the `benchmarks` folder.
 
