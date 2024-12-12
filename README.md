@@ -46,6 +46,10 @@ openssl genrsa -3 3072 > benchmarks/model_benchmarks/sgx/Enclave/private_key.pem
 5. To train the models from the paper or visualize the benchmark results run the corresponding notebooks in the `models` and `benchmarks` folder.
 6. To run the example or the benchmarks change to the corresponding directory, run the Makefile `make release` and execute the binary `./main`. If you want to run an example with SGX, use `make SGX_PRERELEASE=1 SGX_DEBUG=0`to build the SGX enclave and the binary. The results can be visusalized with evaluation.ipynb in the `benchmarks` folder.
 
+## Paper
+For a detailed description of the framework, please refer to our paper:
+
+Jonas Sander, Sebastian Berndt, Ida Bruhns and Thomas Eisenbarth. 2025. **Dash: Accelerating Distributed Private Convolutional Neural Network Inference with Arithmetic Garbled Circuits.** IACR Transactions on Cryptographic Hardware and Embedded Systems, 2025(1), 420-449. \[[Link](https://tches.iacr.org/index.php/TCHES/article/view/11935)\] \[[DOI](https://doi.org/10.46586/tches.v2025.i1.420-449)\]
 
 ## References
 [1] Ball, Marshall, Tal Malkin, and Mike Rosulek. "Garbling gadgets for boolean and arithmetic circuits." Proceedings of the 2016 ACM SIGSAC Conference on Computer and Communications Security. 2016.
