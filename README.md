@@ -43,7 +43,11 @@ openssl genrsa -3 3072 > sgx/Enclave/private_key.pem
 openssl genrsa -3 3072 > benchmarks/model_benchmarks/sgx/Enclave/private_key.pem
 ```
 4. To download the datasets run `cd data` and `.download.sh`.
-5. To train the models from the paper or visualize the benchmark results run the corresponding notebooks in the `models` and `benchmarks` folder.
+5. To train the models from the paper run the notebook in the `models` directory, e.g., via
+```bash
+cd models
+jupyter nbconvert --execute --inplace train_pytorch.ipynb
+```
 6. To run the example or the benchmarks change to the corresponding directory, run the Makefile `make release` and execute the binary `./main`. If you want to run an example with SGX, use `make SGX_PRERELEASE=1 SGX_DEBUG=0`to build the SGX enclave and the binary. The results can be visusalized with evaluation.ipynb in the `benchmarks` folder.
 
 ## Paper
