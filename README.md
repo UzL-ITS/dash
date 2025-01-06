@@ -17,7 +17,9 @@ With the following software:
 - GCC version 9.4.0
 - Intel SGX Linux 2.18 (with in-kernel driver)
 - Google's Protocol Buffers for C++ v3.20
-- dlib
+    - Sources: https://github.com/protocolbuffers/protobuf/releases/download/v3.20.0/protobuf-cpp-3.20.0.zip
+    - Installation: https://github.com/protocolbuffers/protobuf/blob/v3.20.0/src/README.md
+- dlib v19.24
 - CUDA 12.2
 - gtest
 
@@ -36,19 +38,23 @@ cp -r /usr/lib/gcc/x86_64-linux-gnu/9/include/* benchmarks/model_benchmarks/sgx/
 ```bash
 wget -P dash/onnx https://raw.githubusercontent.com/onnx/onnx/093a8d335a66ea136eb1f16b3a1ce6237ee353ab/onnx/onnx.proto3
 ```
-3. Generate private keys for the enclave:
+3. Compile the protobuf files:
+```bash
+protoc --cpp_out=. dash/onnx/onnx.proto3
+```
+4. Generate private keys for the enclave:
 ```bash
 openssl genrsa -3 3072 > sgx/Enclave/private_key.pem
 
 openssl genrsa -3 3072 > benchmarks/model_benchmarks/sgx/Enclave/private_key.pem
 ```
-4. To download the datasets run `cd data` and `.download.sh`.
-5. To train the models from the paper run the notebook in the `models` directory, e.g., via
+5. To download the datasets run `cd data` and `.download.sh`.
+6. To train the models from the paper run the notebook in the `models` directory, e.g., via
 ```bash
 cd models
 jupyter nbconvert --execute --inplace train_pytorch.ipynb
 ```
-6. To run the example or the benchmarks change to the corresponding directory, run the Makefile `make release` and execute the binary `./main`. If you want to run an example with SGX, use `make SGX_PRERELEASE=1 SGX_DEBUG=0`to build the SGX enclave and the binary. The results can be visusalized with evaluation.ipynb in the `benchmarks` folder.
+7. To run the example or the benchmarks change to the corresponding directory, run the Makefile `make release` and execute the binary `./main`. If you want to run an example with SGX, use `make SGX_PRERELEASE=1 SGX_DEBUG=0`to build the SGX enclave and the binary. The results can be visusalized with evaluation.ipynb in the `benchmarks` folder.
 
 ## Paper
 For a detailed description of the framework, please refer to our paper:
