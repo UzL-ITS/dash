@@ -547,7 +547,6 @@ class SignGadget {
 
             // Step 3: Check mrs sum for sign
             vector<ProjectionGate*> proj_gates;
-            vector<ProjectionGate*> proj_gates2;
             auto ms_mrs_modulus = m_gc->get_mrs_base().at(0);
             sign_functionality_params params = {ms_mrs_modulus, m_lower_bound,
                                                 m_upper_bound};

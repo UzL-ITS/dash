@@ -50,7 +50,9 @@ class GarbledCircuitInterface {
         {Layer::flatten, "flatten"},
         {Layer::sign, "sign"},
         {Layer::max_pool, "max_pool"},
+        {Layer::max, "max"},
         {Layer::rescale, "rescale"},
+        {Layer::base_extension, "base_extension"}
     };
 #endif
    protected:
@@ -85,8 +87,8 @@ class GarbledCircuitInterface {
     vector<LabelTensor*> m_upshift_labels_base{};
     vector<LabelTensor*> m_upshift_labels{};
     //// Downshift labels
-    vector<LabelTensor*> m_downshift_labels_base{};
-    vector<LabelTensor*> m_downshift_labels{};
+    std::map<crt_val_t, std::vector<LabelTensor*>> m_downshift_labels_base{};
+    std::map<crt_val_t, std::vector<LabelTensor*>> m_downshift_labels{};
 
     mrs_val_t* m_dev_mrs_base{nullptr};
     crt_val_t* m_dev_crt_base{nullptr};
@@ -219,11 +221,15 @@ class GarbledCircuitInterface {
         for (auto label : m_upshift_labels) {
             delete label;
         }
-        for (auto label : m_downshift_labels_base) {
-            delete label;
+        for (auto pair : m_downshift_labels_base) {
+            for (auto label : pair.second) {
+                delete label;
+            }
         }
-        for (auto label : m_downshift_labels) {
-            delete label;
+        for (auto pair : m_downshift_labels) {
+            for (auto label : pair.second) {
+                delete label;
+            }
         }
 
 #ifndef SGX
@@ -315,7 +321,7 @@ class GarbledCircuitInterface {
      * @param inputs
      * @return vector<LabelTensor*>*
      */
-    vector<LabelTensor*>* garble_inputs(ScalarTensor<q_val_t>& inputs) {
+    vector<LabelTensor*>* garble_inputs(const ScalarTensor<q_val_t>& inputs) {
         assert(m_circuit->get_input_dims() == inputs.get_dims() &&
                "Input dimension does not match circuit input dimension");
         // reduce inputs to crt domain
@@ -420,6 +426,7 @@ class GarbledCircuitInterface {
         }
 
         for (size_t i = 0; i < m_crt_base.size(); ++i) {
+            // std::cerr << "decoding for plain modulus: " << m_crt_base.at(i) << std::endl;
             size_t found = 0;
             for (int j = 0; j < m_crt_base.at(i); ++j) {
                 LabelTensor dec{*g_output->at(i)};
@@ -430,13 +437,21 @@ class GarbledCircuitInterface {
                         m_decoding_information.at(i).at(j).data()[l]) {
                         crt_value.at(i).data()[l] = j;
                         found++;
+                        // print which one was found
+                        // std::cerr << "decoded plain value " << j << " for output " << l << std::endl;
                     }
                 }
                 if (found == m_circuit->get_output_size()) break;
             }
+            if (found != m_circuit->get_output_size()) {
+                std::cerr << "ERROR: mismatch in decoding for plain modulus: " << m_crt_base.at(i) << std::endl;
+                std::cerr << "found: " << found << std::endl;
+                std::cerr << "m_circuit->get_output_size(): " << m_circuit->get_output_size() << std::endl;
+            }
             assert(found == m_circuit->get_output_size() &&
                    "Decoding failed, no matching label found");
         }
+
         auto result =
             util::chinese_remainder<crt_val_t, q_val_t>(m_crt_base, crt_value);
 
@@ -515,11 +530,11 @@ class GarbledCircuitInterface {
             reinterpret_cast<void**>(&m_dev_dev_downshift_labels), size));
         m_dev_downshift_labels = new crt_val_t*[m_crt_base.size()];
         for (size_t i = 0; i < m_crt_base.size(); ++i) {
-            size_t size = m_downshift_labels.at(i)->size() * sizeof(crt_val_t);
+            size_t size = get_downshift_label({2}, i).size() * sizeof(crt_val_t); // FM 30.10.24: previously, m_downshift_labels contained only one element (for s = 2 = base.at(0))
             cudaCheckError(cudaMalloc(
                 reinterpret_cast<void**>(&m_dev_downshift_labels[i]), size));
             cudaCheckError(cudaMemcpy(m_dev_downshift_labels[i],
-                                      get_downshift_label(i).get_components(),
+                                      get_downshift_label({2}, i).get_components(), // FM 30.10.24: previously, m_downshift_labels contained only one element (for s = 2 = base.at(0))
                                       size, cudaMemcpyHostToDevice));
         }
         cudaCheckError(cudaMemcpy(m_dev_dev_downshift_labels,
@@ -653,11 +668,11 @@ class GarbledCircuitInterface {
         ocall_alloc_ptr_array(
             reinterpret_cast<void***>(&m_dev_downshift_labels), size);
         for (size_t i = 0; i < m_crt_base.size(); ++i) {
-            int size = m_downshift_labels.at(i)->size() * sizeof(crt_val_t);
+            int size = get_downshift_label({2}, i).size() * sizeof(crt_val_t); // FM 30.10.24: previously, m_downshift_labels contained only one element (for s = 2 = base.at(0))
             ocall_cudaMalloc(
                 reinterpret_cast<void**>(&m_dev_downshift_labels[i]), size);
             sgx_cudaMemcpyToDevice(m_dev_downshift_labels[i],
-                                   get_downshift_label(i).get_components(),
+                                   get_downshift_label({2}, i).get_components(),
                                    size);
         }
         ocall_cudaMemcpyToDevicePtr(
@@ -769,12 +784,30 @@ class GarbledCircuitInterface {
         return *m_upshift_labels.at(modulus_idx);
     }
 
-    LabelTensor get_downshift_label_base(size_t modulus_idx) {
-        return *m_downshift_labels_base.at(modulus_idx);
+    LabelTensor get_downshift_label_base(const vector<crt_val_t> scaling_factors, size_t modulus_idx) {
+        const auto scaling_factors_prod = std::accumulate(scaling_factors.begin(), scaling_factors.end(), 1, std::multiplies<crt_val_t>());
+
+        if (m_downshift_labels_base.find(scaling_factors_prod) != m_downshift_labels_base.end()) {
+            return *m_downshift_labels_base.at(scaling_factors_prod).at(modulus_idx);
+        }
+        else {
+            const auto labels = create_downshift_base_labels();
+            m_downshift_labels_base[scaling_factors_prod] = labels;
+            return *labels.at(modulus_idx);
+        }
     }
 
-    LabelTensor get_downshift_label(size_t modulus_idx) {
-        return *m_downshift_labels.at(modulus_idx);
+    LabelTensor get_downshift_label(const vector<crt_val_t> scaling_factors, size_t modulus_idx) {
+        const auto scaling_factors_prod = std::accumulate(scaling_factors.begin(), scaling_factors.end(), 1, std::multiplies<crt_val_t>());
+
+        if (m_downshift_labels.find(scaling_factors_prod) != m_downshift_labels.end()) {
+            return *m_downshift_labels.at(scaling_factors_prod).at(modulus_idx);
+        }
+        else {
+            const auto labels = create_downshift_labels(scaling_factors);
+            m_downshift_labels[scaling_factors_prod] = labels;
+            return *labels.at(modulus_idx);
+        }
     }
 
 #ifdef BENCHMARK
@@ -902,31 +935,48 @@ class GarbledCircuitInterface {
         init_base_label(m_circuit->get_layer()[0]->get_input_dims());
 
         // Init constant labels for garbled rescaling
-        //// Base label
+        //// Upshift base labels
         for (auto base : m_crt_base) {
             auto label = new LabelTensor{base};
             label->init_random();
             m_upshift_labels_base.push_back(label);
-            label = new LabelTensor{base};
-            label->init_random();
-            m_downshift_labels_base.push_back(label);
         }
-        //// Shift label
+
+        //// Upshift labels
         m_upshift_labels.resize(m_crt_base.size());
-        m_downshift_labels.resize(m_crt_base.size());
         for (size_t i = 0; i < m_crt_base.size(); ++i) {
             m_upshift_labels.at(i) =
                 new LabelTensor{get_label_offset(m_crt_base.at(i))};
             *m_upshift_labels.at(i) *=
                 util::modulo(m_crt_modulus / 2, m_crt_base.at(i));
             *m_upshift_labels.at(i) += *m_upshift_labels_base.at(i);
-
-            m_downshift_labels.at(i) =
-                new LabelTensor{get_label_offset(m_crt_base.at(i))};
-            *m_downshift_labels.at(i) *=
-                util::modulo(m_crt_modulus / 4, m_crt_base.at(i));
-            *m_downshift_labels.at(i) += *m_downshift_labels_base.at(i);
         }
+    }
+
+    //TODO: unify these 2 in style
+    vector<LabelTensor * > create_downshift_base_labels() {
+        auto labels = vector<LabelTensor * >{};
+
+        for (auto base : m_crt_base) {
+            auto label = new LabelTensor{base};
+            label->init_random();
+            labels.push_back(label);
+        }
+
+        return labels;
+    }
+
+    vector<LabelTensor *> create_downshift_labels(const vector<crt_val_t> scaling_factors) {
+        const auto prod_scaling_factors = std::accumulate(scaling_factors.begin(), scaling_factors.end(), 1, std::multiplies<crt_val_t>());
+        auto labels = vector<LabelTensor * >{m_crt_base.size(), nullptr};
+
+        for (size_t i = 0; i < m_crt_base.size(); ++i) {
+            labels.at(i) = new LabelTensor{get_label_offset(m_crt_base.at(i))};
+            *labels.at(i) *= util::modulo(m_crt_modulus / (2 * prod_scaling_factors), m_crt_base.at(i));
+            *labels.at(i) += get_downshift_label_base(scaling_factors, i);
+        }
+
+        return labels;
     }
 };
 

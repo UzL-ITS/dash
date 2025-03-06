@@ -280,10 +280,116 @@ void bench_rescale_cpu(int runs, wandb_t q_const,
                 auto g_outputs{gc->cpu_evaluate(g_inputs, nr_threads)};
                 auto t2 = high_resolution_clock::now();
                 auto outputs{gc->decode_outputs(g_outputs)};
+                // outputs.print();
 
                 duration<double, std::milli> ms_double = t2 - t1;
 
                 fprintf(fpt, "CPU, %d, %d, %lu, %d, %f\n", nr_threads,
+                        crt_base_size, dim, run, ms_double.count());
+
+                // clean up
+                for (auto label : *g_inputs) {
+                    delete label;
+                }
+                delete g_inputs;
+
+                delete circuit;
+                delete gc;
+            }
+        }
+    }
+}
+
+void bench_rescale_cpu_scaling_factor(std::mt19937 gen, int runs, wandb_t q_const,
+                       vector<size_t> dims, FILE* fpt) {
+    const auto nr_threads = 16;
+    const auto crt_base_size = 8;
+    for (auto dim : dims) {
+        // TODO: Run BE gadget for scaling_factor = 2 as well?
+        for (int scaling_factor = 2; scaling_factor <= 19; ++scaling_factor) {
+            // printf("Rescale Layer (CPU), nr_threads: %d\n", nr_threads);
+            std::cerr << "Rescale Layer (CPU), scaling_factor: " << scaling_factor << ", dim: " << dim
+                      << std::endl;
+            for (int run = 0; run < runs; ++run) {
+                auto inputs_q = init_inputs(dim_t{dim}, gen);
+
+                Circuit * circuit = nullptr;
+                vector<crt_val_t> crt_base;
+                GarbledCircuit *gc = nullptr; 
+                switch (scaling_factor) {
+                    case 2:
+                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims()}};
+                        gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
+                        break;
+                    case 3:
+                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
+                        crt_base = {3, 2, 5, 7, 11, 13, 17, 19};
+                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
+                        break;
+                    case 4:
+                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims()},
+                                             new Rescale{1, inputs_q.get_dims()}};
+                        gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
+                        break;
+                    case 5:
+                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
+                        crt_base = {5, 2, 3, 7, 11, 13, 17, 19};
+                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
+                        break;
+                    case 7:
+                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
+                        crt_base = {7, 2, 3, 5, 11, 13, 17, 19};
+                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
+                        break;
+                    case 8:
+                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims()},
+                                             new Rescale{1, inputs_q.get_dims()},
+                                             new Rescale{1, inputs_q.get_dims()}};
+                        gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
+                        break;
+                    case 11:
+                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
+                        crt_base = {11, 2, 3, 5, 7, 13, 17, 19};
+                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
+                        break;
+                    case 13:
+                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
+                        crt_base = {13, 2, 3, 5, 7, 11, 17, 19};
+                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
+                        break;
+                    case 16:
+                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims()},
+                                             new Rescale{1, inputs_q.get_dims()},
+                                             new Rescale{1, inputs_q.get_dims()},
+                                             new Rescale{1, inputs_q.get_dims()}};
+                        gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
+                        break;
+                    case 17:
+                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
+                        crt_base = {17, 2, 3, 5, 7, 11, 13, 19};
+                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
+                        break;
+                    case 19:
+                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
+                        crt_base = {19, 2, 3, 5, 7, 11, 13, 17};
+                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
+                        break;
+                    default:
+                        std::cerr << "Skipping scaling factor: " << scaling_factor << std::endl;
+                        continue;
+                        break;
+                }
+                
+                auto g_inputs{gc->garble_inputs(inputs_q)};
+                auto t1 = high_resolution_clock::now();
+                auto g_outputs{gc->cpu_evaluate(g_inputs, nr_threads)};
+                auto t2 = high_resolution_clock::now();
+                auto outputs{gc->decode_outputs(g_outputs)};
+                // outputs.print();
+
+                duration<double, std::milli> ms_double = t2 - t1;
+
+                fprintf(fpt, "CPU, %d, %d, %lu, %d, %f\n", scaling_factor,
                         crt_base_size, dim, run, ms_double.count());
 
                 // clean up
@@ -389,6 +495,22 @@ int main() {
         wandb_t q_const = 0.0001;
         vector<size_t> dims{128, 2048, 16384};
         bench_rescale_cpu(runs, q_const, dims, fpt);
+        fclose(fpt);
+    }
+    //
+    //
+    //
+
+    //
+    //
+    // Benchmark: Rescale scaling factor
+    {
+        std::string filename = path + date_string + "_rescaling_scaling_factor.csv";
+        fpt = fopen(filename.c_str(), "w+");
+        fprintf(fpt, "type, scaling_factor, crt_base_size, dims, run, runtime\n");
+        wandb_t q_const = 0.0001;
+        vector<size_t> dims{128, 2048, 16384};
+        bench_rescale_cpu_scaling_factor(gen, runs, q_const, dims, fpt);
         fclose(fpt);
     }
     //

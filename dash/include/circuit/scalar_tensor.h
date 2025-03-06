@@ -482,6 +482,15 @@ class ScalarTensor {
         return result;
     }
 
+    static ScalarTensor<T> rescale(ScalarTensor<q_val_t>& values, crt_val_t s) {
+        ScalarTensor<T> result{values.get_dims()};
+        for (size_t i = 0; i < values.size(); ++i) {
+            // imitate rounding behaviour of garbled rescaling
+            result.push_back(std::floor(static_cast<double>(values.at(i)) / s));
+        }
+        return result;
+    }
+
     void print() const {
         std::string ss = "";
         if (typeid(T) == typeid(int)) {

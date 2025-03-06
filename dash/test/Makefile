@@ -1,7 +1,6 @@
-IDIR = ../include
-CPPFLAGS = -I$(IDIR) -I../onnx
-ALL_CXXFLAGS = $(CXXFLAGS) $(CPPFLAGS) -msse4.2 -maes -mrdrnd -fopenmp -std=c++17 -I/usr/local/cuda/include -lcudart -lcuda -g
-LDFLAGS = -lgtest -lpthread
+CPPFLAGS = -I../include -I/usr/include/eigen3 -I../onnx
+ALL_CXXFLAGS = $(CXXFLAGS) $(CPPFLAGS) -msse4.2 -maes -mrdrnd -fopenmp -std=c++17 -I/usr/local/cuda/include -lcudart -lcuda -g #-DLABEL_TENSOR_USE_EIGEN -DEIGEN_USE_BLAS
+LDFLAGS = -lgtest -lpthread -lopenblas
 OBJDIR = obj
 LIBS = -L/usr/local/cuda/lib64
 ONNXDIR = ../onnx

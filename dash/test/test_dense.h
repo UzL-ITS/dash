@@ -6,6 +6,7 @@
 #include <vector>
 
 #define QUANTIZATION_CONSTANT 10
+#define QUANTIZATION_METHOD QuantizationMethod::SimpleQuant
 
 #include "circuit/circuit.h"
 #include "circuit/layer/dense.h"

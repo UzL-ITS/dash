@@ -25,7 +25,7 @@ class MaxPool2d : public Layer {
               size_t kernel_width, size_t kernel_height,
               size_t stride_width = 1, size_t stride_height = 1)
         : Layer(dim_t{input_width, input_height, channel},
-                dim_t{input_width / stride_width, input_height / stride_height,
+                dim_t{input_width / kernel_width, input_height / kernel_height,
                       channel}),
           m_input_width{input_width},
           m_input_height{input_height},
@@ -87,6 +87,12 @@ class MaxPool2d : public Layer {
         }
         printf("\n");
     }
+
+    size_t get_kernel_width() const { return m_kernel_width; }
+    size_t get_kernel_height() const { return m_kernel_height; }
+    size_t get_stride_width() const { return m_stride_width; }
+    size_t get_stride_height() const { return m_stride_height; }
+
 };
 
 #endif /* MAX_POOL2D_H */

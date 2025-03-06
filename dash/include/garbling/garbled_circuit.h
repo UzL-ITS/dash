@@ -17,6 +17,9 @@
 #include "garbling/layer/garbled_relu.h"
 #include "garbling/layer/garbled_rescale.h"
 #include "garbling/layer/garbled_sign.h"
+#include "garbling/layer/garbled_max.h"
+#include "garbling/layer/garbled_maxpool2d.h"
+#include "garbling/layer/garbled_base_extension.h"
 #include "misc/datatypes.h"
 
 #ifdef BENCHMARK
@@ -30,77 +33,89 @@ using std::chrono::milliseconds;
 
 using std::vector;
 
-class GarbledCircuit : public GarbledCircuitInterface {
+class GarbledCircuit : public GarbledCircuitInterface
+{
 #ifdef BENCHMARK
     std::map<std::string, double> m_garbling_times;
 #endif
 
-   public:
-    GarbledCircuit(Circuit* circuit, int cpm_size, crt_val_t max_modulus = 0,
+public:
+    GarbledCircuit(Circuit *circuit, int cpm_size, crt_val_t max_modulus = 0,
                    bool garble_me = true)
-        : GarbledCircuitInterface{circuit, cpm_size, max_modulus} {
+        : GarbledCircuitInterface{circuit, cpm_size, max_modulus}
+    {
         assert(circuit->get_layer().size() > 0 &&
                "Circuit must have at least one layer");
-        if (garble_me) {
+        if (garble_me)
+        {
             garble();
             gen_decoding_information();
         }
     }
 
-    GarbledCircuit(Circuit* circuit, int cpm_size,
-                   const vector<mrs_val_t>& mrs_base, crt_val_t max_modulus = 0,
+    GarbledCircuit(Circuit *circuit, int cpm_size,
+                   const vector<mrs_val_t> &mrs_base, crt_val_t max_modulus = 0,
                    bool garble_me = true)
-        : GarbledCircuitInterface{circuit, cpm_size, mrs_base, max_modulus} {
+        : GarbledCircuitInterface{circuit, cpm_size, mrs_base, max_modulus}
+    {
         assert(circuit->get_layer().size() > 0 &&
                "Circuit must have at least one layer");
-        if (garble_me) {
+        if (garble_me)
+        {
             garble();
             gen_decoding_information();
         }
     }
 
-    GarbledCircuit(Circuit* circuit, int cpm_size, float mrs_accuracy,
+    GarbledCircuit(Circuit *circuit, int cpm_size, float mrs_accuracy,
                    crt_val_t max_modulus = 0, bool garble_me = true)
         : GarbledCircuitInterface{circuit, cpm_size, mrs_accuracy,
-                                  max_modulus} {
+                                  max_modulus}
+    {
         assert(circuit->get_layer().size() > 0 &&
                "Circuit must have at least one layer");
-        if (garble_me) {
+        if (garble_me)
+        {
             garble();
             gen_decoding_information();
         }
     }
 
-    GarbledCircuit(Circuit* circuit, const vector<crt_val_t>& crt_base,
+    GarbledCircuit(Circuit *circuit, const vector<crt_val_t> &crt_base,
                    crt_val_t max_modulus = 0, bool garble_me = true)
-        : GarbledCircuitInterface{circuit, crt_base, max_modulus} {
+        : GarbledCircuitInterface{circuit, crt_base, max_modulus}
+    {
         assert(circuit->get_layer().size() > 0 &&
                "Circuit must have at least one layer");
-        if (garble_me) {
+        if (garble_me)
+        {
             garble();
             gen_decoding_information();
         }
     }
 
-    GarbledCircuit(Circuit* circuit, const vector<crt_val_t>& crt_base,
-                   const vector<mrs_val_t>& mrs_base, crt_val_t max_modulus = 0,
+    GarbledCircuit(Circuit *circuit, const vector<crt_val_t> &crt_base,
+                   const vector<mrs_val_t> &mrs_base, crt_val_t max_modulus = 0,
                    bool garble_me = true)
-        : GarbledCircuitInterface{circuit, crt_base, mrs_base, max_modulus} {
+        : GarbledCircuitInterface{circuit, crt_base, mrs_base, max_modulus}
+    {
         assert(circuit->get_layer().size() > 0 &&
                "Circuit must have at least one layer");
-        if (garble_me) {
+        if (garble_me)
+        {
             garble();
             gen_decoding_information();
         }
     }
 
 #ifdef BENCHMARK
-    std::map<std::string, double> get_garbling_times() {
+    std::map<std::string, double> get_garbling_times()
+    {
         return m_garbling_times;
     }
 #endif
 
-   private:
+private:
     /*
      * @brief Garbles the circuit from input to output layer.
      *
@@ -111,33 +126,41 @@ class GarbledCircuit : public GarbledCircuitInterface {
      * @param circuit Plaintext circuit.
      * @param crt_base CRT base used for garbling.
      */
-    void garble() override {
+    void garble() override
+    {
         init_garbling();
-        for (size_t i = 0; i < m_circuit->get_layer().size(); ++i) {
-            vector<LabelTensor*>* in_label;
+        for (size_t i = 0; i < m_circuit->get_layer().size(); ++i)
+        {
+            vector<LabelTensor *> *in_label;
             // If not first layer, use output labels of previous layer.
-            if (i > 0) {
+            if (i > 0)
+            {
                 in_label = m_garbled_layer.back()->get_out_label();
             }
             // First layer gets base label as input label.
-            else {
+            else
+            {
                 in_label = &m_base_label;
             }
 
             // Garble circuit layer by layer.
-            Layer* layer = m_circuit->get_layer().at(i);
+            Layer *layer = m_circuit->get_layer().at(i);
 
             // Handle flatten layer separately
-            if (layer->get_type() == Layer::flatten) {
-                for (auto l : *in_label) {
+            if (layer->get_type() == Layer::flatten)
+            {
+                for (auto l : *in_label)
+                {
                     l->flatten();
                 }
                 i++;
-                if (i >= m_circuit->get_layer().size()) return;
+                if (i >= m_circuit->get_layer().size())
+                    return;
                 layer = m_circuit->get_layer().at(i);
             }
 
-            if (layer->get_type() == Layer::dense) {
+            if (layer->get_type() == Layer::dense)
+            {
 #ifdef BENCHMARK
                 auto t1 = high_resolution_clock::now();
 #endif
@@ -146,14 +169,19 @@ class GarbledCircuit : public GarbledCircuitInterface {
 #ifdef BENCHMARK
                 auto t2 = high_resolution_clock::now();
                 duration<double, std::milli> ms_double = t2 - t1;
-                if (m_garbling_times.find("dense") == m_garbling_times.end()) {
+                if (m_garbling_times.find("dense") == m_garbling_times.end())
+                {
                     m_garbling_times["dense"] = ms_double.count();
-                } else {
+                }
+                else
+                {
                     m_garbling_times["dense"] += ms_double.count();
                 }
 #endif
                 m_garbled_layer.push_back(garbled_dense);
-            } else if (layer->get_type() == Layer::conv2d) {
+            }
+            else if (layer->get_type() == Layer::conv2d)
+            {
 #ifdef BENCHMARK
                 auto t1 = high_resolution_clock::now();
 #endif
@@ -162,14 +190,19 @@ class GarbledCircuit : public GarbledCircuitInterface {
 #ifdef BENCHMARK
                 auto t2 = high_resolution_clock::now();
                 duration<double, std::milli> ms_double = t2 - t1;
-                if (m_garbling_times.find("conv2d") == m_garbling_times.end()) {
+                if (m_garbling_times.find("conv2d") == m_garbling_times.end())
+                {
                     m_garbling_times["conv2d"] = ms_double.count();
-                } else {
+                }
+                else
+                {
                     m_garbling_times["conv2d"] += ms_double.count();
                 }
 #endif
                 m_garbled_layer.push_back(garbled_conv2d);
-            } else if (layer->get_type() == Layer::projection) {
+            }
+            else if (layer->get_type() == Layer::projection)
+            {
 #ifdef BENCHMARK
                 auto t1 = high_resolution_clock::now();
 #endif
@@ -179,14 +212,19 @@ class GarbledCircuit : public GarbledCircuitInterface {
                 auto t2 = high_resolution_clock::now();
                 duration<double, std::milli> ms_double = t2 - t1;
                 if (m_garbling_times.find("projection") ==
-                    m_garbling_times.end()) {
+                    m_garbling_times.end())
+                {
                     m_garbling_times["projection"] = ms_double.count();
-                } else {
+                }
+                else
+                {
                     m_garbling_times["projection"] += ms_double.count();
                 }
 #endif
                 m_garbled_layer.push_back(garbled_proj);
-            } else if (layer->get_type() == Layer::mult_layer) {
+            }
+            else if (layer->get_type() == Layer::mult_layer)
+            {
 #ifdef BENCHMARK
                 auto t1 = high_resolution_clock::now();
 #endif
@@ -196,14 +234,19 @@ class GarbledCircuit : public GarbledCircuitInterface {
                 auto t2 = high_resolution_clock::now();
                 duration<double, std::milli> ms_double = t2 - t1;
                 if (m_garbling_times.find("mult_layer") ==
-                    m_garbling_times.end()) {
+                    m_garbling_times.end())
+                {
                     m_garbling_times["mult_layer"] = ms_double.count();
-                } else {
+                }
+                else
+                {
                     m_garbling_times["mult_layer"] += ms_double.count();
                 }
 #endif
                 m_garbled_layer.push_back(garbled_mult_layer);
-            } else if (layer->get_type() == Layer::mixed_mod_mult_layer) {
+            }
+            else if (layer->get_type() == Layer::mixed_mod_mult_layer)
+            {
 #ifdef BENCHMARK
                 auto t1 = high_resolution_clock::now();
 #endif
@@ -213,16 +256,21 @@ class GarbledCircuit : public GarbledCircuitInterface {
                 auto t2 = high_resolution_clock::now();
                 duration<double, std::milli> ms_double = t2 - t1;
                 if (m_garbling_times.find("mixed_mod_mult_layer") ==
-                    m_garbling_times.end()) {
+                    m_garbling_times.end())
+                {
                     m_garbling_times["mixed_mod_mult_layer"] =
                         ms_double.count();
-                } else {
+                }
+                else
+                {
                     m_garbling_times["mixed_mod_mult_layer"] +=
                         ms_double.count();
                 }
 #endif
                 m_garbled_layer.push_back(g_mixed_mod_mult);
-            } else if (layer->get_type() == Layer::approx_relu) {
+            }
+            else if (layer->get_type() == Layer::approx_relu)
+            {
 #ifdef BENCHMARK
                 auto t1 = high_resolution_clock::now();
 #endif
@@ -232,14 +280,19 @@ class GarbledCircuit : public GarbledCircuitInterface {
                 auto t2 = high_resolution_clock::now();
                 duration<double, std::milli> ms_double = t2 - t1;
                 if (m_garbling_times.find("approx_relu") ==
-                    m_garbling_times.end()) {
+                    m_garbling_times.end())
+                {
                     m_garbling_times["approx_relu"] = ms_double.count();
-                } else {
+                }
+                else
+                {
                     m_garbling_times["approx_relu"] += ms_double.count();
                 }
 #endif
                 m_garbled_layer.push_back(g_approx_relu);
-            } else if (layer->get_type() == Layer::sign) {
+            }
+            else if (layer->get_type() == Layer::sign)
+            {
 #ifdef BENCHMARK
                 auto t1 = high_resolution_clock::now();
 #endif
@@ -248,14 +301,19 @@ class GarbledCircuit : public GarbledCircuitInterface {
 #ifdef BENCHMARK
                 auto t2 = high_resolution_clock::now();
                 duration<double, std::milli> ms_double = t2 - t1;
-                if (m_garbling_times.find("sign") == m_garbling_times.end()) {
+                if (m_garbling_times.find("sign") == m_garbling_times.end())
+                {
                     m_garbling_times["sign"] = ms_double.count();
-                } else {
+                }
+                else
+                {
                     m_garbling_times["sign"] += ms_double.count();
                 }
 #endif
                 m_garbled_layer.push_back(g_sign);
-            } else if (layer->get_type() == Layer::rescale) {
+            }
+            else if (layer->get_type() == Layer::rescale)
+            {
 #ifdef BENCHMARK
                 auto t1 = high_resolution_clock::now();
 #endif
@@ -265,14 +323,85 @@ class GarbledCircuit : public GarbledCircuitInterface {
                 auto t2 = high_resolution_clock::now();
                 duration<double, std::milli> ms_double = t2 - t1;
                 if (m_garbling_times.find("rescale") ==
-                    m_garbling_times.end()) {
+                    m_garbling_times.end())
+                {
                     m_garbling_times["rescale"] = ms_double.count();
-                } else {
+                }
+                else
+                {
                     m_garbling_times["rescale"] += ms_double.count();
                 }
 #endif
                 m_garbled_layer.push_back(g_rescale);
-            } else {
+            }
+            else if (layer->get_type() == Layer::max)
+            {
+#ifdef BENCHMARK
+                auto t1 = high_resolution_clock::now();
+#endif
+                auto g_max{new GarbledMax{layer, this}};
+                g_max->garble(in_label);
+#ifdef BENCHMARK
+                auto t2 = high_resolution_clock::now();
+                duration<double, std::milli> ms_double = t2 - t1;
+                if (m_garbling_times.find("max") ==
+                    m_garbling_times.end())
+                {
+                    m_garbling_times["max"] = ms_double.count();
+                }
+                else
+                {
+                    m_garbling_times["max"] += ms_double.count();
+                }
+#endif
+                m_garbled_layer.push_back(g_max);
+            }
+            else if (layer->get_type() == Layer::max_pool)
+            {
+#ifdef BENCHMARK
+                auto t1 = high_resolution_clock::now();
+#endif
+                auto g_maxpool{new GarbledMaxPool2d{layer, this}};
+                g_maxpool->garble(in_label);
+#ifdef BENCHMARK
+                auto t2 = high_resolution_clock::now();
+                duration<double, std::milli> ms_double = t2 - t1;
+                if (m_garbling_times.find("max_pool") ==
+                    m_garbling_times.end())
+                {
+                    m_garbling_times["max_pool"] = ms_double.count();
+                }
+                else
+                {
+                    m_garbling_times["max_pool"] += ms_double.count();
+                }
+#endif
+                m_garbled_layer.push_back(g_maxpool);
+            }
+            else if (layer->get_type() == Layer::base_extension)
+            {
+#ifdef BENCHMARK
+                auto t1 = high_resolution_clock::now();
+#endif
+                auto g_be{new GarbledBaseExtension{layer, this}};
+                g_be->garble(in_label);
+#ifdef BENCHMARK
+                auto t2 = high_resolution_clock::now();
+                duration<double, std::milli> ms_double = t2 - t1;
+                if (m_garbling_times.find("base_extension") ==
+                    m_garbling_times.end())
+                {
+                    m_garbling_times["base_extension"] = ms_double.count();
+                }
+                else
+                {
+                    m_garbling_times["base_extension"] += ms_double.count();
+                }
+#endif
+                m_garbled_layer.push_back(g_be);
+            }
+            else
+            {
                 throw std::runtime_error("Garbling failed: Unknown layer type");
             }
         }

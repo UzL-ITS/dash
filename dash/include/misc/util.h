@@ -141,7 +141,7 @@ ScalarTensor<V> chinese_remainder(vector<T>& moduli,
 }
 
 template <typename T, typename V>
-vector<ScalarTensor<T>> crt_reduce(ScalarTensor<V>& values,
+vector<ScalarTensor<T>> crt_reduce(const ScalarTensor<V>& values,
                                    vector<T>& crt_base) {
     vector<ScalarTensor<T>> reduced_values;
     reduced_values.resize(crt_base.size());
@@ -153,6 +153,27 @@ vector<ScalarTensor<T>> crt_reduce(ScalarTensor<V>& values,
         }
     }
     return reduced_values;
+}
+
+template <typename T>
+inline vector<T> remove_at_index(const vector<T> vec, const size_t index) {
+    assert(index < vec.size() && "Index out of bounds");
+    vector<T> out_vec;
+    out_vec.reserve(vec.size() - 1);
+    for (size_t i = 0; i < vec.size(); ++i) {
+        if (i != index)
+        {
+            out_vec.push_back(vec.at(i));
+        }
+    }
+    return out_vec;
+}
+
+template <typename T>
+inline vector<T> reverse(const vector<T> vec) {
+    vector<T> out_vec = vec;
+    std::reverse(out_vec.begin(), out_vec.end());
+    return out_vec;
 }
 
 // For testing purposes.
@@ -170,5 +191,4 @@ inline vector<T> get_random_vector(int size, T min, T max,
 }
 
 }  // namespace util
-
 #endif
