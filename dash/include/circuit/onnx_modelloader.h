@@ -260,7 +260,9 @@ Circuit* create_circuit_from_onnx_model(onnx::ModelProto model,
 
             layer.push_back(dense);
             if (q_method == QuantizationMethod::ScaleQuant) {
-                Rescale* rescale = new Rescale(QL, dense->get_output_dims());
+                // auto rescale = new Rescale(QL, dense->get_output_dims());
+                const vector<crt_val_t> s = {QS};//assumes that QS is part of CRT base
+                auto rescale = new Rescale(s, dense->get_output_dims()); 
                 layer.push_back(rescale);
             }
             next_layer_dim = dense->get_output_dims();
@@ -326,7 +328,9 @@ Circuit* create_circuit_from_onnx_model(onnx::ModelProto model,
 
             layer.push_back(conv);
             if (q_method == QuantizationMethod::ScaleQuant) {
-                auto rescale = new Rescale(QL, conv->get_output_dims());
+                // auto rescale = new Rescale(QL, conv->get_output_dims());
+                const vector<crt_val_t> s = {QS};//assumes that QS is part of CRT base
+                auto rescale = new Rescale(s, conv->get_output_dims());
                 layer.push_back(rescale);
             }
             next_layer_dim = conv->get_output_dims();
