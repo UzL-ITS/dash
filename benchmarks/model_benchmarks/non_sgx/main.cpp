@@ -14,10 +14,36 @@ using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
 using std::chrono::milliseconds;
 
+
+vector<crt_val_t> optimal_crt_base() {
+    if constexpr (QL == 3) {
+        return {3, 5, 7, 8, 11};
+    } else if constexpr (QL == 4) {
+        return {3, 5, 7, 11, 13, 16};
+    } else if constexpr (QL == 5) {
+        return {3, 5, 7, 11, 13, 32};
+    } else {
+        throw std::invalid_argument("Unsupported QL value");
+    }
+}
+
+//TODO: must these be sorted in some way?
+vector<mrs_val_t> optimal_mrs_base() {
+    if constexpr (QL == 3) {
+        return {12, 6, 6, 6};
+    } else if constexpr (QL == 4) {
+        return {10, 8, 6, 5, 5, 5};
+    } else if constexpr (QL == 5) {
+        return {8, 8, 8, 7, 6, 6};
+    } else {
+        throw std::invalid_argument("Unsupported QL value");
+    }}
+
 void bench_model_cpu(Circuit* circuit,
                      vector<ScalarTensor<q_val_t>> input_images,
                      vector<unsigned long> labels, int nr_inputs,
-                     std::string model_dir, infer_config_t config, FILE* fpt) {
+                     std::string model_dir, infer_config_t config, FILE* fpt,
+                     bool optimize_bases = false) {
     printf("Bench (CPU) Model: %s\n", config.model_name.c_str());
 
     for (auto relu_acc : config.relu_accs) {
@@ -25,8 +51,17 @@ void bench_model_cpu(Circuit* circuit,
         vector<unsigned long> infered_labels;
         for (int i = 0; i < nr_inputs; ++i) {
             auto inputs = input_images.at(i);
-            auto gc = new GarbledCircuit(circuit, config.target_crt_base_size,
-                                         relu_acc);
+            
+            GarbledCircuit* gc;
+            if(optimize_bases) {
+                const auto crt_base = optimal_crt_base();
+                const auto mrs_base = optimal_mrs_base();
+                const auto max_modulus = crt_base.back();
+                gc = new GarbledCircuit(circuit, crt_base, mrs_base, max_modulus);
+            }
+            else {
+                gc = new GarbledCircuit(circuit, config.target_crt_base_size, relu_acc);
+            }
 
             auto g_inputs{gc->garble_inputs(inputs)};
 
@@ -135,7 +170,7 @@ int main() {
     //
     //
     // Benchmark
-    std::string filename = path + date_string + "_plain_models.csv";
+    std::string filename = path + date_string + "_garbled_models.csv";
     fpt = fopen(filename.c_str(), "w+");
     fprintf(fpt,
             "type, model, target_crt_base_size, runtime, relu_acc, "
@@ -148,7 +183,7 @@ int main() {
     //     "model_name, plain_acc, plain_q_acc, q_const,
     //     target_crt_base_size\n");
 
-    int nr_inputs = 2;
+    int nr_inputs = 100;
     auto mnist_dataset = mnist("../../../data/MNIST/raw");
     auto cifar10_dataset =
         cifar10("../../../data/cifar10/cifar-10-batches-bin");
@@ -162,8 +197,8 @@ int main() {
         .dataset = mnist_dataset,
         .model_name = "MODEL_A",
         .model_file = "MODEL_A",
-        .quantization_method = QuantizationMethod::SimpleQuant};
-    configs.push_back(MODEL_A_config);
+        .quantization_method = QuantizationMethod::ScaleQuant};
+    // configs.push_back(MODEL_A_config);
 
     infer_config_t MODEL_B_POOL_REPL_config{
         .target_crt_base_size = 9,
@@ -171,8 +206,8 @@ int main() {
         .dataset = mnist_dataset,
         .model_name = "MODEL_B",
         .model_file = "MODEL_B_POOL_REPL",
-        .quantization_method = QuantizationMethod::SimpleQuant};
-    configs.push_back(MODEL_B_POOL_REPL_config);
+        .quantization_method = QuantizationMethod::ScaleQuant};
+    // configs.push_back(MODEL_B_POOL_REPL_config);
 
     infer_config_t MODEL_C{
         .target_crt_base_size = 9,
@@ -180,8 +215,8 @@ int main() {
         .dataset = mnist_dataset,
         .model_name = "MODEL_C",
         .model_file = "MODEL_C",
-        .quantization_method = QuantizationMethod::SimpleQuant};
-    configs.push_back(MODEL_C);
+        .quantization_method = QuantizationMethod::ScaleQuant};
+    // configs.push_back(MODEL_C);
 
     infer_config_t MODEL_D_POOL_REPL_config{
         .target_crt_base_size = 8,
@@ -189,8 +224,8 @@ int main() {
         .dataset = mnist_dataset,
         .model_name = "MODEL_D",
         .model_file = "MODEL_D_POOL_REPL",
-        .quantization_method = QuantizationMethod::SimpleQuant};
-    configs.push_back(MODEL_D_POOL_REPL_config);
+        .quantization_method = QuantizationMethod::ScaleQuant};
+    // configs.push_back(MODEL_D_POOL_REPL_config);
 
     infer_config_t MODEL_E_30_config{
         .target_crt_base_size = 5,
@@ -199,7 +234,7 @@ int main() {
         .model_name = "MODEL_E_30",
         .model_file = "MODEL_E_30",
         .quantization_method = QuantizationMethod::SimpleQuant};
-    configs.push_back(MODEL_E_30_config);
+    // configs.push_back(MODEL_E_30_config);
 
     infer_config_t MODEL_E_100_config{
         .target_crt_base_size = 5,
@@ -208,7 +243,7 @@ int main() {
         .model_name = "MODEL_E_100",
         .model_file = "MODEL_E_100",
         .quantization_method = QuantizationMethod::SimpleQuant};
-    configs.push_back(MODEL_E_100_config);
+    // configs.push_back(MODEL_E_100_config);
 
     infer_config_t MODEL_F_GNNP_POOL_REPL_config{
         .target_crt_base_size = 7,
@@ -217,7 +252,7 @@ int main() {
         .model_name = "MODEL_F_GNNP_POOL_REPL",
         .model_file = "MODEL_F_GNNP_POOL_REPL",
         .quantization_method = QuantizationMethod::ScaleQuant};
-    configs.push_back(MODEL_F_GNNP_POOL_REPL_config);
+    // configs.push_back(MODEL_F_GNNP_POOL_REPL_config);
 
     infer_config_t MODEL_F_MINIONN_POOL_REPL_config{
         .target_crt_base_size = 7,
@@ -226,7 +261,7 @@ int main() {
         .model_name = "MODEL_F_MINIONN_POOL_REPL",
         .model_file = "MODEL_F_MINIONN_POOL_REPL",
         .quantization_method = QuantizationMethod::ScaleQuant};
-    configs.push_back(MODEL_F_MINIONN_POOL_REPL_config);
+    // configs.push_back(MODEL_F_MINIONN_POOL_REPL_config);
 
     for (size_t i = 0; i < configs.size(); ++i) {
         auto config = configs.at(i);
@@ -265,9 +300,9 @@ int main() {
         //         config.target_crt_base_size);
 
         bench_model_cpu(circuit, small_test_images_q, small_test_labels,
-                        nr_inputs, model_dir, config, fpt);
-        bench_model_gpu(circuit, small_test_images_q, small_test_labels,
-                        nr_inputs, model_dir, config, fpt);
+                        nr_inputs, model_dir, config, fpt, true);
+        // bench_model_gpu(circuit, small_test_images_q, small_test_labels,
+        //                 nr_inputs, model_dir, config, fpt);
 
         delete circuit;
     }

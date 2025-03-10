@@ -27,7 +27,7 @@
 // \ell in the ReDASH paper
 #define QL 4
 // s in the ReDASH paper
-#define QS 17
+#define QS 16
 
 typedef long long q_val_t;  // V
 typedef int16_t crt_val_t;  // T
