@@ -893,7 +893,7 @@ static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor 
 }
 #endif // LABEL_TENSOR_USE_EIGEN
 
-    static LabelTensor* conv2d_zero(LabelTensor& l, LabelTensor zero,
+    static LabelTensor* conv2d(LabelTensor& l, LabelTensor zero,
                                     ScalarTensor<q_val_t>& weights,
                                     LabelTensor& bias_label, size_t input_width,
                                     size_t input_height, size_t channel,
