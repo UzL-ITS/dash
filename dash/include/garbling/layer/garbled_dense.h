@@ -86,8 +86,6 @@ class GarbledDense : public GarbledLayer {
     }
 
     void garble(vector<LabelTensor*>* in_label) override {
-        const auto matvecmul_zero = LabelTensor::matvecmul_zero;
-        const auto matvecmul_zero_tf = LabelTensor::matvecmul_zero_tf;
         int channel_tf = m_dense->get_channel_tf();
 
         // Encode quantized weights and biases
@@ -107,12 +105,13 @@ class GarbledDense : public GarbledLayer {
             auto in = *in_label->at(i);
             auto zero_label = m_gc->get_zero_label(modulus);
             if (channel_tf == 0) {
-                m_out_label->at(i) = matvecmul_zero(
-                    m_qe_weights, in, zero_label, DEFAULT_NUM_THREADS);
+#ifdef LABEL_TENSOR_USE_EIGEN
+                m_out_label->at(i) = LabelTensor::matvecmul_eigen(m_qe_weights, in);
+#else
+                m_out_label->at(i) = LabelTensor::matvecmul(m_qe_weights, in, zero_label, DEFAULT_NUM_THREADS);
+#endif
             } else {
-                m_out_label->at(i) =
-                    matvecmul_zero_tf(m_qe_weights, in, zero_label, channel_tf,
-                                      DEFAULT_NUM_THREADS);
+                m_out_label->at(i) = LabelTensor::matvecmul_tf(m_qe_weights, in, zero_label, channel_tf, DEFAULT_NUM_THREADS);
             }
             *m_out_label->at(i) += m_gc->get_zero_label(modulus);
         }
@@ -120,8 +119,6 @@ class GarbledDense : public GarbledLayer {
 
     vector<LabelTensor*>* cpu_evaluate(vector<LabelTensor*>* encoded_inputs,
                                        int nr_threads) override {
-        const auto matvecmul_zero = LabelTensor::matvecmul_zero;
-        const auto matvecmul_zero_tf = LabelTensor::matvecmul_zero_tf;
         free_out_label();
 
         size_t crt_base_size = m_gc->get_crt_base().size();
@@ -133,11 +130,13 @@ class GarbledDense : public GarbledLayer {
             crt_val_t modulus{m_gc->get_crt_base().at(i)};
             auto zero_label = m_gc->get_zero_label(modulus);
             if (channel_tf == 0) {
-                m_out_label->at(i) =
-                    matvecmul_zero(m_qe_weights, in, zero_label, nr_threads);
+#ifdef LABEL_TENSOR_USE_EIGEN
+                m_out_label->at(i) = LabelTensor::matvecmul_eigen(m_qe_weights, in);
+#else
+                m_out_label->at(i) = LabelTensor::matvecmul(m_qe_weights, in, zero_label, nr_threads);
+#endif
             } else {
-                m_out_label->at(i) = matvecmul_zero_tf(
-                    m_qe_weights, in, zero_label, channel_tf, nr_threads);
+                m_out_label->at(i) = LabelTensor::matvecmul_tf(m_qe_weights, in, zero_label, channel_tf, nr_threads);
             }
             *m_out_label->at(i) += *m_qe_bias_label->at(i);
         }

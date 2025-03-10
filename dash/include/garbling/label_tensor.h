@@ -781,39 +781,6 @@ class LabelTensor {
 
     // Tensor operations
     static LabelTensor* matvecmul(const ScalarTensor<q_val_t>& m,
-                                  LabelTensor& l, int nr_threads) {
-        size_t input_dim = l.m_dims.at(0);
-        size_t output_dim = m.get_dims().at(0);
-        assert(m.get_dims().size() == 2 && "Dimension mismatch");
-        assert(l.m_dims.size() == 1 && "Dimension mismatch");
-
-        crt_val_t modulus = l.m_modulus;
-        size_t nr_comps{get_nr_comps(modulus)};
-
-        auto result = new LabelTensor{modulus, 0, dim_t{output_dim}};
-        auto c_comps = result->get_components();
-        auto b_comps = l.get_components();
-        auto a_ptr = m.data();
-        
-    #ifndef SGX
-    #pragma omp parallel for num_threads(nr_threads)
-    #endif
-        for (size_t j = 0; j < output_dim; ++j) {
-            auto a = a_ptr + j * input_dim;
-            auto c = c_comps + j * nr_comps;
-            for (size_t k = 0; k < input_dim; ++k) {
-                auto b = b_comps + k * nr_comps;
-                for (size_t i = 0; i < nr_comps; ++i) {
-                    c[i] = (c[i] + b[i] * a[k]) % modulus;
-                }
-            }
-        }
-
-        return result;
-    }
-
-    // Tensor operations
-    static LabelTensor* matvecmul_zero(const ScalarTensor<q_val_t>& m,
                                        LabelTensor& l, LabelTensor zero,
                                        int nr_threads) {
         size_t input_dim = l.m_dims.at(0);
@@ -851,39 +818,6 @@ class LabelTensor {
     }
 
     static LabelTensor* matvecmul_tf(const ScalarTensor<q_val_t>& m,
-                                          LabelTensor& l, size_t channel,
-                                          int nr_threads) {
-        size_t input_dim = l.m_dims.at(0);
-        size_t output_dim = m.get_dims().at(0);
-        size_t offset = input_dim / channel;
-        assert(m.get_dims().size() == 2 && "Dimension mismatch");
-        assert(l.m_dims.size() == 1 && "Dimension mismatch");
-
-        crt_val_t modulus = l.m_modulus;
-        size_t nr_comps{get_nr_comps(modulus)};
-
-        auto result = new LabelTensor{modulus, 0, dim_t{output_dim}};
-        auto c_comps = result->get_components();
-        auto b_comps = l.get_components();
-        auto a_ptr = m.data();
-#ifndef SGX
-#pragma omp parallel for num_threads(nr_threads)
-#endif
-        for (size_t j = 0; j < output_dim; ++j) {
-            auto c = c_comps + j * nr_comps;
-            auto a = a_ptr + j * input_dim;
-            for (size_t k = 0; k < input_dim; ++k) {
-                int input_idx = k / channel + (k % channel) * offset;
-                auto b = b_comps + input_idx * nr_comps;
-                for (size_t i = 0; i < nr_comps; ++i) {
-                    c[i] = (c[i] + b[i] * a[k]) % modulus;
-                }
-            }
-        }
-        return result;
-    }
-
-    static LabelTensor* matvecmul_zero_tf(const ScalarTensor<q_val_t>& m,
                                      LabelTensor& l, LabelTensor zero,
                                      size_t channel, int nr_threads) {
         size_t input_dim = l.m_dims.at(0);
@@ -924,6 +858,7 @@ class LabelTensor {
     }
 
 #ifdef LABEL_TENSOR_USE_EIGEN
+//TODO: bring new zero_label feature to eigen
 static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor &l)
 {
     assert(m.get_dims().size() == 2 && "Dimension mismatch");
@@ -957,78 +892,6 @@ static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor 
     return result.release();
 }
 #endif // LABEL_TENSOR_USE_EIGEN
-
-    static LabelTensor* conv2d(LabelTensor& l, ScalarTensor<q_val_t>& weights,
-                               LabelTensor& bias_label, size_t input_width,
-                               size_t input_height, size_t channel,
-                               size_t filter, size_t filter_width,
-                               size_t filter_height, size_t stride_width,
-                               size_t stride_height, int nr_threads) {
-        size_t output_width = (input_width - filter_width) / stride_width + 1;
-        size_t output_height =
-            (input_height - filter_height) / stride_height + 1;
-
-        size_t output_size = output_width * output_height;  // sizer per filter
-        size_t filter_size = filter_width * filter_height;
-        size_t input_size = input_width * input_height;
-
-        size_t nr_comps = l.get_nr_comps();
-
-        dim_t dims{output_height, output_width, filter};
-        auto result = new LabelTensor{l.get_modulus(), 0, dims};
-
-        crt_val_t* output = result->get_components();
-        crt_val_t* input = l.get_components();
-        crt_val_t modulus = l.get_modulus();
-
-        q_val_t* we = weights.data();
-        crt_val_t* bi = bias_label.get_components();
-#ifndef SGX
-#pragma omp parallel for collapse(4) num_threads(nr_threads)
-#endif
-        // applied on all label components
-        for (size_t m = 0; m < nr_comps; ++m) {
-            // for all filter
-            for (size_t v = 0; v < filter; ++v) {
-                // move filter along y-axis
-                for (size_t l = 0; l < output_height; ++l) {
-                    // move filter along x-axis
-                    for (size_t k = 0; k < output_width; ++k) {
-                        size_t output_idx = v * output_size * nr_comps +
-                                            l * output_width * nr_comps +
-                                            k * nr_comps + m;
-                        // scalar product over all input-channel...
-                        for (size_t w = 0; w < channel; ++w) {
-                            // ...along filter height and...
-                            for (size_t i = 0; i < filter_height; ++i) {
-                                // ...width
-                                for (size_t j = 0; j < filter_width; ++j) {
-                                    output[output_idx] =
-                                        (output[output_idx] +
-                                         we[v * filter_size * channel +
-                                            w * filter_size +
-                                            i * filter_height + j] *
-                                             input[w * input_size * nr_comps +
-                                                   i * input_width * nr_comps +
-                                                   j * nr_comps +
-                                                   k * stride_width * nr_comps +
-                                                   l * stride_height *
-                                                       input_width * nr_comps +
-                                                   m]) %
-                                        modulus;
-                                }
-                            }
-                        }
-                        // add bias to each output-channel
-                        output[output_idx] =
-                            (output[output_idx] + bi[v * nr_comps + m]) %
-                            modulus;
-                    }
-                }
-            }
-        }
-        return result;
-    }
 
     static LabelTensor* conv2d_zero(LabelTensor& l, LabelTensor zero,
                                     ScalarTensor<q_val_t>& weights,
@@ -1107,76 +970,6 @@ static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor 
                         output[output_idx] =
                             (output[output_idx] + bi[v * nr_comps + m]) %
                             modulus;
-                    }
-                }
-            }
-        }
-        return result;
-    }
-
-    static LabelTensor* conv2d_static_bias_label(
-        LabelTensor& l, ScalarTensor<q_val_t>& weights,
-        const LabelSlice& bias_label, size_t input_width, size_t input_height,
-        size_t channel, size_t filter, size_t filter_width,
-        size_t filter_height, size_t stride_width, size_t stride_height) {
-        size_t output_width = (input_width - filter_width) / stride_width + 1;
-        size_t output_height =
-            (input_height - filter_height) / stride_height + 1;
-
-        size_t output_size = output_width * output_height;  // sizer per filter
-        size_t filter_size = filter_width * filter_height;
-        size_t input_size = input_width * input_height;
-
-        size_t nr_comps = l.get_nr_comps();
-
-        dim_t dims{output_height, output_width, filter};
-        auto result = new LabelTensor{l.get_modulus(), 0, dims};
-
-        crt_val_t* output = result->get_components();
-        crt_val_t* input = l.get_components();
-        crt_val_t modulus = l.get_modulus();
-
-        q_val_t* we = weights.data();
-        crt_val_t* bi = bias_label.get_components();
-#ifndef SGX
-#pragma omp parallel for collapse(4)
-#endif
-        // applied on all label components
-        for (size_t m = 0; m < nr_comps; ++m) {
-            // for all filter
-            for (size_t v = 0; v < filter; ++v) {
-                // move filter along y-axis
-                for (size_t l = 0; l < output_height; ++l) {
-                    // move filter along x-axis
-                    for (size_t k = 0; k < output_width; ++k) {
-                        size_t output_idx = v * output_size * nr_comps +
-                                            l * output_width * nr_comps +
-                                            k * nr_comps + m;
-                        // scalar product over all input-channel...
-                        for (size_t w = 0; w < channel; ++w) {
-                            // ...along filter height and...
-                            for (size_t i = 0; i < filter_height; ++i) {
-                                // ...width
-                                for (size_t j = 0; j < filter_width; ++j) {
-                                    output[output_idx] =
-                                        (output[output_idx] +
-                                         we[v * filter_size * channel +
-                                            w * filter_size +
-                                            i * filter_height + j] *
-                                             input[w * input_size * nr_comps +
-                                                   i * input_width * nr_comps +
-                                                   j * nr_comps +
-                                                   k * stride_width * nr_comps +
-                                                   l * stride_height *
-                                                       input_width * nr_comps +
-                                                   m]) %
-                                        modulus;
-                                }
-                            }
-                        }
-                        // add bias to each output-channel
-                        output[output_idx] =
-                            (output[output_idx] + bi[m]) % modulus;
                     }
                 }
             }
@@ -1333,6 +1126,7 @@ static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor 
         return result;
     }
 
+// TODO: Fix, then integrate in garbled_conv2d.h (cf. maurerf/sprint on GitHub)
 #ifdef LABEL_TENSOR_USE_EIGEN
     static LabelTensor *conv2d_eigen(LabelTensor &l, ScalarTensor<q_val_t> &weights,
                                      LabelTensor &bias_label, size_t input_width,

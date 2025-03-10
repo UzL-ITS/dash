@@ -125,6 +125,7 @@ TEST_P(TestTwoDense, EndtoEndCPU) {
     delete g_inputs;
 }
 
+#ifndef LABEL_TENSOR_USE_EIGEN //TODO: remove macro when Eigen operations in LT support CUDA
 TEST_P(TestSingleDense, CudaMove) {
     m_gc->cuda_move();
     auto g_dense{static_cast<GarbledDense*>(m_gc->get_garbled_layer().at(0))};
@@ -223,6 +224,7 @@ TEST_P(TestTwoDense, EndtoEndGPU) {
     delete g_inputs;
     m_gc->cuda_free_inputs(g_dev_inputs);
 }
+#endif // LABEL_TENSOR_USE_EIGEN
 
 namespace test_dense_layer {
 dense_params dp0 = {
