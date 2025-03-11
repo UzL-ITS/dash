@@ -889,6 +889,7 @@ static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor 
     auto result = std::make_unique<LabelTensor>(modulus, 0, dim_t{output_dim});
     std::memcpy(result->get_components(), eigen_c_mod.data(), output_dim * nr_comps * sizeof(crt_val_t));
 
+    //TODO: IMPORTANT NOTE: This in insecure! Adding the zero label AFTER the matrix multiplication posibly leaks intermediate results.
     // For each output label, check if all components are 0 mod modulus.
     // If yes, add the entire zero label to that label (component-wise addition).
     crt_val_t* res = result->get_components();
