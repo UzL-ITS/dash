@@ -106,7 +106,7 @@ class GarbledDense : public GarbledLayer {
             auto zero_label = m_gc->get_zero_label(modulus);
             if (channel_tf == 0) {
 #ifdef LABEL_TENSOR_USE_EIGEN
-                m_out_label->at(i) = LabelTensor::matvecmul_eigen(m_qe_weights, in);
+                m_out_label->at(i) = LabelTensor::matvecmul_eigen(m_qe_weights, in, zero_label);
 #else
                 m_out_label->at(i) = LabelTensor::matvecmul(m_qe_weights, in, zero_label, DEFAULT_NUM_THREADS);
 #endif
@@ -131,7 +131,7 @@ class GarbledDense : public GarbledLayer {
             auto zero_label = m_gc->get_zero_label(modulus);
             if (channel_tf == 0) {
 #ifdef LABEL_TENSOR_USE_EIGEN
-                m_out_label->at(i) = LabelTensor::matvecmul_eigen(m_qe_weights, in);
+                m_out_label->at(i) = LabelTensor::matvecmul_eigen(m_qe_weights, in, zero_label);
 #else
                 m_out_label->at(i) = LabelTensor::matvecmul(m_qe_weights, in, zero_label, nr_threads);
 #endif

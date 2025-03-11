@@ -859,7 +859,7 @@ class LabelTensor {
 
 #ifdef LABEL_TENSOR_USE_EIGEN
 //TODO: bring new zero_label feature to eigen
-static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor &l)
+static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor &l, LabelTensor zero)
 {
     assert(m.get_dims().size() == 2 && "Dimension mismatch");
     assert(l.m_dims.size() == 1 && "Dimension mismatch");
@@ -888,6 +888,32 @@ static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor 
     // Allocate memory for the result
     auto result = std::make_unique<LabelTensor>(modulus, 0, dim_t{output_dim});
     std::memcpy(result->get_components(), eigen_c_mod.data(), output_dim * nr_comps * sizeof(crt_val_t));
+
+    // For each output label, check if all components are 0 mod modulus.
+    // If yes, add the entire zero label to that label (component-wise addition).
+    crt_val_t* res = result->get_components();
+    crt_val_t* z = zero.get_components();
+    for (size_t i = 0; i < output_dim; ++i)
+    {
+        bool all_zero = true;
+        for (size_t j = 0; j < nr_comps; ++j)
+        {
+            size_t pos = i * nr_comps + j;
+            if (util::modulo(res[pos], modulus) != 0)
+            {
+                all_zero = false;
+                break;
+            }
+        }
+        if (all_zero)
+        {
+            for (size_t j = 0; j < nr_comps; ++j)
+            {
+                size_t pos = i * nr_comps + j;
+                res[pos] = (res[pos] + z[j]) % modulus;
+            }
+        }
+    }
 
     return result.release();
 }
@@ -1233,6 +1259,8 @@ static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor 
             }
         }
 
+        //TODO: add masking, cf. matvecmul_eigen (must also add zero label as function parameter)
+
         return result;
     }
 
@@ -1338,6 +1366,8 @@ static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor 
                 }
             }
         }
+
+        //TODO: add masking, cf. matvecmul_eigen (must also add zero label as function parameter)
 
         return result;
     }
