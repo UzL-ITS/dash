@@ -14,31 +14,7 @@ using std::chrono::duration_cast;
 using std::chrono::high_resolution_clock;
 using std::chrono::milliseconds;
 
-
-vector<crt_val_t> optimal_crt_base() {
-    if constexpr (QL == 3) {
-        return {3, 5, 7, 8, 11};
-    } else if constexpr (QL == 4) {
-        return {3, 5, 7, 11, 13, 16};
-    } else if constexpr (QL == 5) {
-        return {3, 5, 7, 11, 13, 32};
-    } else {
-        throw std::invalid_argument("Unsupported QL value");
-    }
-}
-
-//TODO: must these be sorted in some way?
-vector<mrs_val_t> optimal_mrs_base() {
-    if constexpr (QL == 3) {
-        return {12, 6, 6, 6};
-    } else if constexpr (QL == 4) {
-        return {10, 8, 6, 5, 5, 5};
-    } else if constexpr (QL == 5) {
-        return {8, 8, 8, 7, 6, 6};
-    } else {
-        throw std::invalid_argument("Unsupported QL value");
-    }}
-
+// Make sure to double check QL and QS values in datatypes.h!
 void bench_model_cpu(Circuit* circuit,
                      vector<ScalarTensor<q_val_t>> input_images,
                      vector<unsigned long> labels, int nr_inputs,
@@ -51,11 +27,13 @@ void bench_model_cpu(Circuit* circuit,
         vector<unsigned long> infered_labels;
         for (int i = 0; i < nr_inputs; ++i) {
             auto inputs = input_images.at(i);
+
+            std::cout << "Garbling circuit..." << std::endl;
             
             GarbledCircuit* gc;
             if(optimize_bases) {
-                const auto crt_base = optimal_crt_base();
-                const auto mrs_base = optimal_mrs_base();
+                const auto crt_base = OPTIMAL_CRT_BASE;
+                const auto mrs_base = OPTIMAL_MRS_BASE;
                 const auto max_modulus = crt_base.back();
                 gc = new GarbledCircuit(circuit, crt_base, mrs_base, max_modulus);
             }
@@ -63,7 +41,11 @@ void bench_model_cpu(Circuit* circuit,
                 gc = new GarbledCircuit(circuit, config.target_crt_base_size, relu_acc);
             }
 
+            std::cout << "Garbling inputs..." << std::endl;
+
             auto g_inputs{gc->garble_inputs(inputs)};
+
+            std::cout << "Evaluating circuit..." << std::endl;
 
             auto t1 = high_resolution_clock::now();
             auto g_outputs{gc->cpu_evaluate(g_inputs)};
@@ -76,9 +58,9 @@ void bench_model_cpu(Circuit* circuit,
             duration<double, std::milli> ms_double = t2 - t1;
             auto label = labels.at(i);
 
-            fprintf(fpt, "CPU, %s, %d, %f, %f, %ld, %ld\n",
+            fprintf(fpt, "CPU, %s, %d, %d, %f, %f, %ld, %ld\n",
                     config.model_name.c_str(), config.target_crt_base_size,
-                    ms_double.count(), relu_acc, label, infered_label);
+                    optimize_bases, ms_double.count(), relu_acc, label, infered_label);
 
             //// clean up
             for (auto label : *g_inputs) {
@@ -173,7 +155,7 @@ int main() {
     std::string filename = path + date_string + "_garbled_models.csv";
     fpt = fopen(filename.c_str(), "w+");
     fprintf(fpt,
-            "type, model, target_crt_base_size, runtime, relu_acc, "
+            "type, model, target_crt_base_size, optimize_bases, runtime, relu_acc, "
             "label, infered_label\n");
 
     // filename = path + date_string + "_plain_models.csv";
@@ -183,7 +165,7 @@ int main() {
     //     "model_name, plain_acc, plain_q_acc, q_const,
     //     target_crt_base_size\n");
 
-    int nr_inputs = 100;
+    int nr_inputs = 2;
     auto mnist_dataset = mnist("../../../data/MNIST/raw");
     auto cifar10_dataset =
         cifar10("../../../data/cifar10/cifar-10-batches-bin");
@@ -205,7 +187,7 @@ int main() {
         .relu_accs = {100.0},  //{100.0, 99.999, 99.99, 99.9, 99.0},
         .dataset = mnist_dataset,
         .model_name = "MODEL_B",
-        .model_file = "MODEL_B_POOL_REPL",
+        .model_file = "MODEL_B",
         .quantization_method = QuantizationMethod::ScaleQuant};
     // configs.push_back(MODEL_B_POOL_REPL_config);
 
@@ -223,7 +205,7 @@ int main() {
         .relu_accs = {100.0},  //{100.0, 99.999, 99.99, 99.9, 99.0},
         .dataset = mnist_dataset,
         .model_name = "MODEL_D",
-        .model_file = "MODEL_D_POOL_REPL",
+        .model_file = "MODEL_D",
         .quantization_method = QuantizationMethod::ScaleQuant};
     // configs.push_back(MODEL_D_POOL_REPL_config);
 

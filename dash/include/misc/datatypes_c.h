@@ -25,9 +25,23 @@
 #define WANDB_VAL_MIN FLT_MIN
 
 // \ell in the ReDASH paper
-#define QL 4
-// s in the ReDASH paper
-#define QS 16
+#define QL 5
+// s in the ReDASH paper. Choose the member of the CRT base cloest to 2^QL.
+#define QS 32
+
+// optimal bases for different QL values, precomputed by the ReDASH authors
+#if QL == 3
+    #define OPTIMAL_CRT_BASE std::vector<crt_val_t>{3, 5, 7, 8, 11}
+    #define OPTIMAL_MRS_BASE std::vector<mrs_val_t>{12, 6, 6, 6}
+#elif QL == 4
+    #define OPTIMAL_CRT_BASE std::vector<crt_val_t>{3, 5, 7, 11, 13, 16}
+    #define OPTIMAL_MRS_BASE std::vector<mrs_val_t>{10, 8, 6, 5, 5, 5}
+#elif QL == 5
+    #define OPTIMAL_CRT_BASE std::vector<crt_val_t>{3, 5, 7, 11, 13, 32}
+    #define OPTIMAL_MRS_BASE std::vector<mrs_val_t>{8, 8, 8, 7, 6, 6}
+#else
+    #error "Unsupported QL value: Cannot determine optimal bases."
+#endif
 
 typedef long long q_val_t;  // V
 typedef int16_t crt_val_t;  // T

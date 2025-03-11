@@ -194,9 +194,10 @@ class GarbledCircuitInterface {
             m_max_modulus = max_modulus;
         } else if (max_modulus != 0) {
 #ifndef SGX
-            std::cerr << "Given max. modulus is smaller than largest modulus "
-                         "of CRT-Base. Set max. modulus = max(CRT-BASE)!"
-                      << std::endl;
+            // TODO: compute_max_modulus is broken for optimized CRT and MRS bases, i think.
+            // std::cerr << "Given max. modulus is smaller than largest modulus "
+            //              "of CRT-Base. Set max. modulus = max(CRT-BASE)!"
+            //           << std::endl;
 #endif
         }
     }
