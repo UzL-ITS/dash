@@ -1708,7 +1708,9 @@ void LabelSlice::operator-=(const LabelSlice& l) {
 }
 
 void LabelSlice::operator*=(const q_val_t c) {
-    for (auto comp : *this) {
+    // for (auto comp : *this) { //TODO: fix iterator, re-enable here
+    for (size_t j = 0; j < get_slice_size(); ++j) {
+        crt_val_t* comp = m_tensor.get_components(m_label_ids[j]);
         for (size_t i = 0; i < get_nr_comps(); ++i) {
             comp[i] = util::modulo<q_val_t>((comp[i] * c), get_modulus());
         }

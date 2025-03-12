@@ -267,6 +267,7 @@ Circuit* create_circuit_from_onnx_model(onnx::ModelProto model,
 #else
                 rescale = new Rescale(QL, dense->get_output_dims());
 #endif
+            layer.push_back(rescale);
             }
             next_layer_dim = dense->get_output_dims();
         } else if (node.op_type().compare("Conv") == 0) {
