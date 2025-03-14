@@ -26,8 +26,8 @@
 
 // \ell in the ReDASH paper
 #define QL 5
-// s in the ReDASH paper. Choose the member of the CRT base cloest to 2^QL.
-#define QS 32
+// s in the ReDASH paper. Choose the member of the CRT base cloest to 2^QL. Defining QS enables ReDASH's new scaling.
+#define QS {32}
 
 // optimal bases for different QL values, precomputed by the ReDASH authors
 #if QL == 3

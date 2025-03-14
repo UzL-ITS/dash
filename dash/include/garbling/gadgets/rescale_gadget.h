@@ -197,8 +197,27 @@ public:
         }
 
         // Step 3: Base Extension
-        m_be_gadget = new BaseExtensionGadget{m_gc, m_input_size, m_gc->get_crt_base(), m_scaling_factors};
-        m_be_gadget->garble(out_label, out_label);
+        if (m_use_sign_base_extension)
+        {
+            vector<crt_val_t> out_moduli{2};
+            m_sign_gadget = new SignGadget{m_gc, 1, 0, m_input_size, out_moduli};
+
+            LabelTensor sign_out_label{2, output_dims};
+            vector<LabelTensor *> sign_out_labels{&sign_out_label};
+            m_sign_gadget->garble(out_label, &sign_out_labels);
+#ifndef SGX
+#pragma omp parallel for
+#endif
+            for (size_t i = 0; i < m_input_size; ++i)
+            {
+                out_label->at(0)->set_label(sign_out_label.get_label(i), i);
+            }
+        }
+        else
+        {
+            m_be_gadget = new BaseExtensionGadget{m_gc, m_input_size, m_gc->get_crt_base(), m_scaling_factors};
+            m_be_gadget->garble(out_label, out_label);
+        }
 
         // Step 4: Downshift by max_crt_modulus / (2 * scaling_factor)
         for (size_t i = 0; i < m_input_size; ++i)
@@ -222,6 +241,10 @@ public:
         vector<size_t> ignored_modulus_indices = {};
 
         // Step 1: Upshift by max_crt_modulus / 2
+        // TODO: get_upshift_label is very inefficient
+#ifndef SGX
+#pragma omp parallel for num_threads(nr_threads)
+#endif
         for (size_t i = 0; i < m_input_size; ++i)
         {
             for (size_t j = 0; j < crt_base_size; ++j)
@@ -286,9 +309,27 @@ public:
         }
 
         // Step 3: Base Extension
-        m_be_gadget->cpu_evaluate(out_label, out_label, nr_threads);
+        if (m_use_sign_base_extension)
+        {
+            dim_t output_dims = encoded_inputs->at(0)->get_dims();
+            LabelTensor sign_out_label{2, output_dims};
+            vector<LabelTensor *> sign_out_labels{&sign_out_label};
+            m_sign_gadget->cpu_evaluate(out_label, &sign_out_labels, nr_threads);
+#ifndef SGX
+#pragma omp parallel for num_threads(nr_threads)
+#endif
+            for (size_t i = 0; i < m_input_size; ++i)
+            {
+                out_label->at(0)->set_label(sign_out_label.get_label(i), i);
+            }
+        }
+        else
+        {
+            m_be_gadget->cpu_evaluate(out_label, out_label, nr_threads);
+        }
 
         // Step 4: Downshift by max_crt_modulus / (2 * scaling_factor)
+        //TODO: paralellize, get_downshift_label is very inefficient
         for (size_t i = 0; i < m_input_size; ++i)
         {
             for (size_t j = 0; j < crt_base_size; ++j)

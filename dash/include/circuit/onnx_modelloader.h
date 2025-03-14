@@ -262,7 +262,7 @@ Circuit* create_circuit_from_onnx_model(onnx::ModelProto model,
             if (q_method == QuantizationMethod::ScaleQuant) {
                 Rescale* rescale;
 #ifdef QS
-                const vector<crt_val_t> s = {QS};//assumes that QS is part of CRT base
+                const vector<crt_val_t> s = QS;//assumes that QS is part of CRT base
                 rescale = new Rescale(s, dense->get_output_dims());
 #else
                 rescale = new Rescale(QL, dense->get_output_dims());
@@ -334,7 +334,7 @@ Circuit* create_circuit_from_onnx_model(onnx::ModelProto model,
             if (q_method == QuantizationMethod::ScaleQuant) {
                 Rescale* rescale;
 #ifdef QS
-                const vector<crt_val_t> s = {QS};//assumes that QS is part of CRT base
+                const vector<crt_val_t> s = QS;//assumes that QS is part of CRT base
                 rescale = new Rescale(s, conv->get_output_dims());
 #else
                 rescale = new Rescale(QL, conv->get_output_dims());
