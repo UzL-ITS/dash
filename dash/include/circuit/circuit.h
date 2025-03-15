@@ -23,8 +23,12 @@ class Circuit {
     size_t m_output_size;
     vector<Layer*> m_layer;
 
+    int m_ql;
+    std::vector<int> m_qs;
+
    public:
-    Circuit(std::initializer_list<Layer*> layer) {
+    Circuit(std::initializer_list<Layer*> layer, int ql = 5, std::vector<int> qs = {2, 17})
+        : m_ql{ql}, m_qs{qs} {
         m_layer.reserve(layer.size());
         for (size_t i = 0; i < layer.size(); i++) {
             m_layer.push_back(layer.begin()[i]);
@@ -39,7 +43,8 @@ class Circuit {
                             [](size_t a, size_t b) { return a * b; });
     }
 
-    Circuit(vector<Layer*> layer) : m_layer{layer} {
+    Circuit(vector<Layer*> layer, int ql = 5, std::vector<int> qs = {2, 17})
+        : m_layer{layer}, m_ql{ql}, m_qs{qs} {
         m_input_dims = m_layer.at(0)->get_input_dims();
         m_output_dims = m_layer[m_layer.size() - 1]->get_output_dims();
         m_input_size =
@@ -347,6 +352,9 @@ class Circuit {
     wandb_t get_range_plain_val() {
         return std::abs(get_max_plain_val()) + std::abs(get_min_plain_val());
     }
+
+    int get_ql() const { return m_ql; }
+    std::vector<int> get_qs() const { return m_qs; }
 
     void print() {
         for (auto layer : m_layer) {

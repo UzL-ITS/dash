@@ -145,12 +145,13 @@ public:
         // 3. Write to out_label
         for (size_t i = 0; i < M_EXTENDED_CRT_BASE_SIZE; ++i)
         {
+
+            if (std::find(M_EXTRA_MODULI_INDICES.begin(), M_EXTRA_MODULI_INDICES.end(), i) != M_EXTRA_MODULI_INDICES.end())
+            {
 #ifndef SGX
 #pragma omp parallel for
 #endif
-            for (size_t input_idx = 0; input_idx < M_NR_INPUTS; ++input_idx)
-            {
-                if (std::find(M_EXTRA_MODULI_INDICES.begin(), M_EXTRA_MODULI_INDICES.end(), i) != M_EXTRA_MODULI_INDICES.end())
+                for (size_t input_idx = 0; input_idx < M_NR_INPUTS; ++input_idx)
                 {
                     // find position of ith modulus in m_out_moduli_swapped
                     const auto iter = std::find(m_out_moduli_swapped.begin(), m_out_moduli_swapped.end(), M_OUT_MODULI.at(i));
@@ -160,7 +161,13 @@ public:
                         l_w.at(i_swapped).get_label(input_idx),
                         input_idx);
                 }
-                else
+            }
+            else
+            {
+#ifndef SGX
+#pragma omp parallel for
+#endif
+                for (size_t input_idx = 0; input_idx < M_NR_INPUTS; ++input_idx)
                 {
                     out_label->at(i)->set_label(
                         in_label->at(i)->get_label(input_idx),
@@ -220,7 +227,7 @@ public:
             for (size_t j = 0; j < M_EXTENDED_CRT_BASE_SIZE - i - 1; ++j)
             {
 #ifndef SGX
-// #pragma omp parallel for
+#pragma omp parallel for
 #endif
                 for (size_t input_idx = 0; input_idx < M_NR_INPUTS; ++input_idx)
                 {
@@ -240,12 +247,12 @@ public:
         // 3. Write to out_label
         for (size_t i = 0; i < M_EXTENDED_CRT_BASE_SIZE; ++i)
         {
-#ifndef SGX
-// #pragma omp parallel for
-#endif
-            for (size_t input_idx = 0; input_idx < M_NR_INPUTS; ++input_idx)
+            if (std::find(M_EXTRA_MODULI_INDICES.begin(), M_EXTRA_MODULI_INDICES.end(), i) != M_EXTRA_MODULI_INDICES.end())
             {
-                if (std::find(M_EXTRA_MODULI_INDICES.begin(), M_EXTRA_MODULI_INDICES.end(), i) != M_EXTRA_MODULI_INDICES.end())
+#ifndef SGX
+#pragma omp parallel for
+#endif
+                for (size_t input_idx = 0; input_idx < M_NR_INPUTS; ++input_idx)
                 {
                     // find position of ith modulus in m_out_moduli_swapped
                     const auto iter = std::find(m_out_moduli_swapped.begin(), m_out_moduli_swapped.end(), M_OUT_MODULI.at(i));
@@ -255,7 +262,13 @@ public:
                         l_w.at(i_swapped).get_label(input_idx),
                         input_idx);
                 }
-                else
+            }
+            else
+            {
+#ifndef SGX
+#pragma omp parallel for
+#endif
+                for (size_t input_idx = 0; input_idx < M_NR_INPUTS; ++input_idx)
                 {
                     out_label->at(i)->set_label(
                         encoded_inputs->at(i)->get_label(input_idx),

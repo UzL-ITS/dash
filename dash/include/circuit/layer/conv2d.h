@@ -174,7 +174,7 @@ class Conv2d : public Layer {
            size_t input_width, size_t input_height, size_t channel,
            size_t filter, size_t filter_width, size_t filter_height,
            size_t stride_width, size_t stride_height,
-           QuantizationMethod q_method = QuantizationMethod::SimpleQuant,
+           int ql, QuantizationMethod q_method = QuantizationMethod::SimpleQuant,
            wandb_t q_const = 10)
         : Layer(
               dim_t{input_width, input_height, channel},
@@ -189,9 +189,9 @@ class Conv2d : public Layer {
                 ScalarTensor<q_val_t>::quantize(biases, q_method, q_const);
         } else {
             m_q_weights =
-                ScalarTensor<q_val_t>::quantize(weights, q_method, QL);
+                ScalarTensor<q_val_t>::quantize(weights, q_method, ql);
             m_q_biases =
-                ScalarTensor<q_val_t>::quantize(biases, q_method, 2 * QL);
+                ScalarTensor<q_val_t>::quantize(biases, q_method, 2 * ql);
         }
         m_input_width = input_width;
         m_input_height = input_height;

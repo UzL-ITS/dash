@@ -28,7 +28,7 @@ class TestSingleDense : public ::testing::TestWithParam<dense_params> {
     Circuit* m_circuit;
     GarbledCircuit* m_gc;
     void SetUp() override {
-        auto dense1{new Dense{GetParam().weights, GetParam().biases,
+        auto dense1{new Dense{GetParam().weights, GetParam().biases, 5,
                               QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
         m_circuit = new Circuit{dense1};
         m_gc = new GarbledCircuit{m_circuit, 8};
@@ -45,9 +45,9 @@ class TestTwoDense : public ::testing::TestWithParam<dense_params> {
     Circuit* m_circuit;
     GarbledCircuit* m_gc;
     void SetUp() override {
-        auto dense1{new Dense{GetParam().weights, GetParam().biases,
+        auto dense1{new Dense{GetParam().weights, GetParam().biases, 5,
                               QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
-        auto dense2{new Dense{GetParam().weights, GetParam().biases,
+        auto dense2{new Dense{GetParam().weights, GetParam().biases, 5,
                               QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
         m_circuit = new Circuit{dense1, dense2};
         m_gc = new GarbledCircuit{m_circuit, 8};

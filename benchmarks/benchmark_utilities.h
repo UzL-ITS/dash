@@ -23,6 +23,8 @@ typedef struct infer_config {
     std::string model_name;
     std::string model_file;
     QuantizationMethod quantization_method;
+    int ql;
+    bool optimize_bases;
 } infer_config_t;
 
 void create_dir(std::string path) {

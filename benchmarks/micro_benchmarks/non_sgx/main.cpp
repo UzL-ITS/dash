@@ -88,7 +88,7 @@ void bench_dense_cpu(std::mt19937 gen, int runs, dim_t dims, wandb_t q_const,
                 inputs_q.data(), inputs_q.get_dims());
 
             auto circuit = new Circuit{new Dense{
-                weights, biases, QuantizationMethod::SimpleQuant, q_const}};
+                weights, biases, 5, QuantizationMethod::SimpleQuant, q_const}};
             auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
             int crt_base_size = circuit->infer_crt_base_size(inputs_q);
             auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -131,7 +131,7 @@ void bench_dense_gpu(std::mt19937 gen, int runs, dim_t dims, wandb_t q_const,
                 inputs_q.data(), inputs_q.get_dims());
 
             auto circuit = new Circuit{new Dense{
-                weights, biases, QuantizationMethod::SimpleQuant, q_const}};
+                weights, biases, 5, QuantizationMethod::SimpleQuant, q_const}};
             auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
             int crt_base_size = circuit->infer_crt_base_size(inputs_q);
             auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -200,7 +200,7 @@ void bench_conv2d_cpu(std::mt19937 gen, int runs, vector<dim_t> dims_vec,
             auto circuit = new Circuit{new Conv2d(
                 weights, bias, input_width, input_height, channel, filter,
                 filter_width, filter_height, stride_width, stride_height,
-                QuantizationMethod::SimpleQuant, q_const)};
+                5, QuantizationMethod::SimpleQuant, q_const)};
             auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
             int crt_base_size = circuit->infer_crt_base_size(inputs_q);
             auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -264,7 +264,7 @@ void bench_conv2d_gpu(std::mt19937 gen, int runs, vector<dim_t> dims_vec,
             auto circuit = new Circuit{new Conv2d(
                 weights, bias, input_width, input_height, channel, filter,
                 filter_width, filter_height, stride_width, stride_height,
-                QuantizationMethod::SimpleQuant, q_const)};
+                5, QuantizationMethod::SimpleQuant, q_const)};
             auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
             int crt_base_size = circuit->infer_crt_base_size(inputs_q);
             auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -486,13 +486,26 @@ void bench_sign_activation_gpu(std::mt19937 gen, int runs, dim_t dims,
 }
 
 void bench_rescaling_cpu(std::mt19937 gen, int runs, dim_t dims,
-                         wandb_t q_const, FILE* fpt) {
+                         wandb_t q_const, FILE* fpt, bool use_legacy_scaling) {
     for (auto dim : dims) {
         printf("Rescaling Layer (CPU), dim: %lu\n", dim);
+        if(use_legacy_scaling) {
+            printf("Using legacy scaling\n");
+        } else {
+            printf("Using new scaling\n");
+        }
+        
         for (int run = 0; run < runs; ++run) {
             auto inputs_q = init_inputs(dim_t{dim}, gen);
 
-            auto circuit = new Circuit{new Rescale{1, inputs_q.get_dims()}};
+            Circuit* circuit;
+            if (use_legacy_scaling) {
+                circuit = new Circuit{new Rescale{1, inputs_q.get_dims()}};
+            } else {
+                const vector<crt_val_t> s = {2};
+                circuit = new Circuit{new Rescale{s, inputs_q.get_dims()}};
+            }
+
             int crt_base_size = 8;
 
             auto gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
@@ -504,8 +517,8 @@ void bench_rescaling_cpu(std::mt19937 gen, int runs, dim_t dims,
 
             duration<double, std::milli> ms_double = t2 - t1;
 
-            fprintf(fpt, "CPU, %lu, %d, %d, %f, %f\n", dim, crt_base_size, run,
-                    ms_double.count(), -1.0);
+            fprintf(fpt, "CPU, %lu, %d, %d, %f, %f, %d\n", dim, crt_base_size, run,
+                    ms_double.count(), -1.0, use_legacy_scaling);
 
             // clean up
             for (auto label : *g_inputs) {
@@ -519,47 +532,48 @@ void bench_rescaling_cpu(std::mt19937 gen, int runs, dim_t dims,
     }
 }
 
-void bench_rescaling_gpu(std::mt19937 gen, int runs, dim_t dims,
-                         wandb_t q_const, FILE* fpt) {
-    for (auto dim : dims) {
-        printf("Rescaling Layer (CPU), dim: %lu\n", dim);
-        for (int run = 0; run < runs; ++run) {
-            auto inputs_q = init_inputs(dim_t{dim}, gen);
+// TODO: port to redash
+// void bench_rescaling_gpu(std::mt19937 gen, int runs, dim_t dims,
+//                          wandb_t q_const, FILE* fpt) {
+//     for (auto dim : dims) {
+//         printf("Rescaling Layer (CPU), dim: %lu\n", dim);
+//         for (int run = 0; run < runs; ++run) {
+//             auto inputs_q = init_inputs(dim_t{dim}, gen);
 
-            auto circuit = new Circuit{new Rescale{1, inputs_q.get_dims()}};
-            int crt_base_size = 8;
+//             auto circuit = new Circuit{new Rescale{1, inputs_q.get_dims()}};
+//             int crt_base_size = 8;
 
-            auto m1 = get_mem_usage();
-            auto gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
-            gc->cuda_move();
-            auto g_inputs{gc->garble_inputs(inputs_q)};
-            auto g_dev_inputs{gc->cuda_move_inputs(g_inputs)};
-            auto m2 = get_mem_usage();
+//             auto m1 = get_mem_usage();
+//             auto gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
+//             gc->cuda_move();
+//             auto g_inputs{gc->garble_inputs(inputs_q)};
+//             auto g_dev_inputs{gc->cuda_move_inputs(g_inputs)};
+//             auto m2 = get_mem_usage();
 
-            auto mem_usage = m2 - m1;
+//             auto mem_usage = m2 - m1;
 
-            auto t1 = high_resolution_clock::now();
-            gc->cuda_evaluate(g_dev_inputs);
-            auto t2 = high_resolution_clock::now();
-            auto g_outputs{gc->cuda_move_outputs()};
-            auto outputs{gc->decode_outputs(g_outputs)};
+//             auto t1 = high_resolution_clock::now();
+//             gc->cuda_evaluate(g_dev_inputs);
+//             auto t2 = high_resolution_clock::now();
+//             auto g_outputs{gc->cuda_move_outputs()};
+//             auto outputs{gc->decode_outputs(g_outputs)};
 
-            duration<double, std::milli> ms_double = t2 - t1;
+//             duration<double, std::milli> ms_double = t2 - t1;
 
-            fprintf(fpt, "GPU, %lu, %d, %d, %f, %f\n", dim, crt_base_size, run,
-                    ms_double.count(), mem_usage);
+//             fprintf(fpt, "GPU, %lu, %d, %d, %f, %f\n", dim, crt_base_size, run,
+//                     ms_double.count(), mem_usage);
 
-            // clean up
-            for (auto label : *g_inputs) {
-                delete label;
-            }
-            delete g_inputs;
+//             // clean up
+//             for (auto label : *g_inputs) {
+//                 delete label;
+//             }
+//             delete g_inputs;
 
-            delete circuit;
-            delete gc;
-        }
-    }
-}
+//             delete circuit;
+//             delete gc;
+//         }
+//     }
+// }
 
 int main() {
     init_cuda();
@@ -658,11 +672,12 @@ int main() {
         fpt = fopen(filename.c_str(), "w+");
         fprintf(
             fpt,
-            "type, dimensions, crt_base_size, run, runtime, gpu_mem_usage\n");
+            "type, dimensions, crt_base_size, run, runtime, gpu_mem_usage, use_legacy_scaling\n");
         wandb_t q_const = 0.0001;
         dim_t dims = {128, 256, 512, 1024, 2048, 4096, 8192, 16384};
-        bench_rescaling_cpu(gen, runs, dims, q_const, fpt);
-        bench_rescaling_gpu(gen, runs, dims, q_const, fpt);
+        bench_rescaling_cpu(gen, runs, dims, q_const, fpt, true);
+        bench_rescaling_cpu(gen, runs, dims, q_const, fpt, false);
+        // bench_rescaling_gpu(gen, runs, dims, q_const, fpt);
         fclose(fpt);
     }
     //

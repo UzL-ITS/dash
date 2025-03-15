@@ -31,6 +31,8 @@ typedef struct conv2d_params {
     size_t stride_height;
 } conv2d_params;
 
+//TODO: add proper QL parametrization
+
 // 2D Convolution as matrix multiplication:
 // https://medium.com/@_init_/an-illustrated-explanation-of-performing-2d-convolutions-using-matrix-multiplications-1e8de8cd2544
 // (Bias trick (https://cs231n.github.io/linear-classify/) is also possible)
@@ -118,7 +120,7 @@ class TestSingleConv2d : public ::testing::TestWithParam<conv2d_params> {
             GetParam().input_height, GetParam().channel, GetParam().filter,
             GetParam().filter_width, GetParam().filter_height,
             GetParam().stride_width, GetParam().stride_height,
-            QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
+            5, QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
         m_circuit = new Circuit{conv2d};
         m_gc = new GarbledCircuit{m_circuit, 8};
     }
@@ -216,12 +218,12 @@ TEST_P(TestSingleConv2d, EndtoEndCPU) {
 //     auto conv1{new Conv2d{weight_tensor, bias_tensor, input_width, input_height,
 //                           channel, filter, filter_width, filter_height,
 //                           stride_width, stride_height, QUANTIZATION_METHOD,
-//                           QUANTIZATION_CONSTANT}};
+//                           5, QUANTIZATION_CONSTANT}};
 
 //     auto conv2{new Conv2d{weight_tensor2, bias_tensor2, input_width2,
 //                           input_height2, channel2, filter2, filter_width2,
 //                           filter_height2, stride_width2, stride_height2,
-//                           QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
+//                           5, QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
 
 //     auto circuit = new Circuit{conv1, conv2};
 //     auto gc = new GarbledCircuit(circuit, 8);

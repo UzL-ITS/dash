@@ -45,10 +45,10 @@ class TestGarbledReluMultLayer : public ::testing::TestWithParam<relu_test_t> {
         auto output_dims = input_dims;
         m_circuit = new Circuit{
             new Dense{ScalarTensor<wandb_t>{{1, 0, 1, 0}, dim_t{2, 2}},
-                      ScalarTensor<wandb_t>{{0, 0}, dim_t{2}}},
+                      ScalarTensor<wandb_t>{{0, 0}, dim_t{2}}, 5},
             new Relu{dim_t{2}},
             new Dense{ScalarTensor<wandb_t>{{1, 0, 1, 0}, dim_t{2, 2}},
-                      ScalarTensor<wandb_t>{{0, 0}, dim_t{2}}}};
+                      ScalarTensor<wandb_t>{{0, 0}, dim_t{2}}, 5}};
         m_gc = new GarbledCircuit(m_circuit, GetParam().crt_base,
                                   GetParam().mrs_base);
     }

@@ -18,9 +18,7 @@ class Rescale : public Layer
 
 public:
     Rescale(int l, dim_t dims) : Layer(dims, dims), m_l{l}, m_s{-1}, m_use_sign_base_extension{true} {}
-    Rescale(vector<crt_val_t> s, dim_t dims) : Layer(dims, dims), m_l{-1}, m_s{s}, m_use_sign_base_extension{false} {
-        std::cout << "Rescale: Using s, not l!" << std::endl;
-    }
+    Rescale(vector<crt_val_t> s, dim_t dims) : Layer(dims, dims), m_l{-1}, m_s{s}, m_use_sign_base_extension{false} {}
 
     LayerType get_type() const override { return LayerType::rescale; }
 

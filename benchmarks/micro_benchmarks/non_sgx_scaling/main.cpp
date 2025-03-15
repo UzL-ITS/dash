@@ -82,7 +82,7 @@ void bench_dense_cpu(int runs, wandb_t q_const,
                     inputs_q.data(), inputs_q.get_dims());
 
                 auto circuit = new Circuit{new Dense{
-                    weights, biases, QuantizationMethod::SimpleQuant, q_const}};
+                    weights, biases, 5, QuantizationMethod::SimpleQuant, q_const}};
                 auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
                 int crt_base_size = circuit->infer_crt_base_size(inputs_q);
                 auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -143,7 +143,7 @@ void bench_conv2d_cpu(int runs, wandb_t q_const,
                 auto circuit = new Circuit{new Conv2d(
                     weights, bias, input_width, input_height, channel, filter,
                     filter_width, filter_height, stride_width, stride_height,
-                    QuantizationMethod::SimpleQuant, q_const)};
+                    5, QuantizationMethod::SimpleQuant, q_const)};
                 auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
                 int crt_base_size = circuit->infer_crt_base_size(inputs_q);
                 auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -264,14 +264,27 @@ void bench_sign_activation_cpu(int runs, wandb_t q_const,
 }
 
 void bench_rescale_cpu(int runs, wandb_t q_const,
-                       vector<size_t> dims, FILE* fpt) {
+                       vector<size_t> dims, FILE* fpt, bool use_legacy_scaling) {
     for (auto dim : dims) {
         for (int nr_threads = 1; nr_threads <= 16; ++nr_threads) {
             printf("Rescale Layer (CPU), nr_threads: %d\n", nr_threads);
+            if(use_legacy_scaling) {
+                printf("Using legacy scaling\n");
+            } else {
+                printf("Using new scaling\n");
+            }
+
             for (int run = 0; run < runs; ++run) {
                 auto inputs_q = init_inputs(dim_t{dim});
 
-                auto circuit = new Circuit{new Rescale{1, inputs_q.get_dims()}};
+                Circuit *circuit;
+                if(use_legacy_scaling) {
+                    circuit = new Circuit{new Rescale{1, inputs_q.get_dims()}};
+                } else {
+                    const vector<crt_val_t> s = {2};
+                    circuit = new Circuit{new Rescale{s, inputs_q.get_dims()}};
+                }
+
                 int crt_base_size = 8;
 
                 auto gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
@@ -284,8 +297,8 @@ void bench_rescale_cpu(int runs, wandb_t q_const,
 
                 duration<double, std::milli> ms_double = t2 - t1;
 
-                fprintf(fpt, "CPU, %d, %d, %lu, %d, %f\n", nr_threads,
-                        crt_base_size, dim, run, ms_double.count());
+                fprintf(fpt, "CPU, %d, %d, %lu, %d, %f, %d\n", nr_threads,
+                        crt_base_size, dim, run, ms_double.count(), use_legacy_scaling);
 
                 // clean up
                 for (auto label : *g_inputs) {
@@ -300,97 +313,31 @@ void bench_rescale_cpu(int runs, wandb_t q_const,
     }
 }
 
-void bench_rescale_cpu_scaling_factor(std::mt19937 gen, int runs, wandb_t q_const,
-                       vector<size_t> dims, FILE* fpt) {
-    const auto nr_threads = 16;
-    const auto crt_base_size = 8;
+void bench_rescale_scaling_factor_cpu(int runs, wandb_t q_const,
+                                      vector<size_t> dims, FILE* fpt) {
     for (auto dim : dims) {
-        // TODO: Run BE gadget for scaling_factor = 2 as well?
-        for (int scaling_factor = 2; scaling_factor <= 19; ++scaling_factor) {
-            // printf("Rescale Layer (CPU), nr_threads: %d\n", nr_threads);
-            std::cerr << "Rescale Layer (CPU), scaling_factor: " << scaling_factor << ", dim: " << dim
-                      << std::endl;
-            for (int run = 0; run < runs; ++run) {
-                auto inputs_q = init_inputs(dim_t{dim}, gen);
+        for (const auto& entry : SCALING_FACTORS_CPM_BASES) {
+            const vector<crt_val_t> scaling_factors(entry.second.begin(), entry.second.end());
+            printf("Rescale Layer Scaling Factor (CPU), l: %d\n", entry.first);
 
-                Circuit * circuit = nullptr;
-                vector<crt_val_t> crt_base;
-                GarbledCircuit *gc = nullptr; 
-                switch (scaling_factor) {
-                    case 2:
-                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims()}};
-                        gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
-                        break;
-                    case 3:
-                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
-                        crt_base = {3, 2, 5, 7, 11, 13, 17, 19};
-                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
-                        break;
-                    case 4:
-                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims()},
-                                             new Rescale{1, inputs_q.get_dims()}};
-                        gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
-                        break;
-                    case 5:
-                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
-                        crt_base = {5, 2, 3, 7, 11, 13, 17, 19};
-                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
-                        break;
-                    case 7:
-                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
-                        crt_base = {7, 2, 3, 5, 11, 13, 17, 19};
-                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
-                        break;
-                    case 8:
-                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims()},
-                                             new Rescale{1, inputs_q.get_dims()},
-                                             new Rescale{1, inputs_q.get_dims()}};
-                        gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
-                        break;
-                    case 11:
-                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
-                        crt_base = {11, 2, 3, 5, 7, 13, 17, 19};
-                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
-                        break;
-                    case 13:
-                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
-                        crt_base = {13, 2, 3, 5, 7, 11, 17, 19};
-                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
-                        break;
-                    case 16:
-                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims()},
-                                             new Rescale{1, inputs_q.get_dims()},
-                                             new Rescale{1, inputs_q.get_dims()},
-                                             new Rescale{1, inputs_q.get_dims()}};
-                        gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
-                        break;
-                    case 17:
-                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
-                        crt_base = {17, 2, 3, 5, 7, 11, 13, 19};
-                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
-                        break;
-                    case 19:
-                        circuit = new Circuit{new Rescale{1, inputs_q.get_dims(), false}};
-                        crt_base = {19, 2, 3, 5, 7, 11, 13, 17};
-                        gc = new GarbledCircuit(circuit, crt_base, 100.0F);
-                        break;
-                    default:
-                        std::cerr << "Skipping scaling factor: " << scaling_factor << std::endl;
-                        continue;
-                        break;
-                }
-                
+            for (int run = 0; run < runs; ++run) {
+                auto inputs_q = init_inputs(dim_t{dim});
+                auto circuit = new Circuit{new Rescale{scaling_factors, inputs_q.get_dims()}};
+
+                int crt_base_size = 8;
+
+                auto gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
                 auto g_inputs{gc->garble_inputs(inputs_q)};
                 auto t1 = high_resolution_clock::now();
-                auto g_outputs{gc->cpu_evaluate(g_inputs, nr_threads)};
+                auto g_outputs{gc->cpu_evaluate(g_inputs, 16)};
                 auto t2 = high_resolution_clock::now();
                 auto outputs{gc->decode_outputs(g_outputs)};
                 // outputs.print();
 
                 duration<double, std::milli> ms_double = t2 - t1;
 
-                fprintf(fpt, "CPU, %d, %d, %lu, %d, %f\n", scaling_factor,
-                        crt_base_size, dim, run, ms_double.count());
+                fprintf(fpt, "CPU, %d, %d, %lu, %d, %f, %d\n", 1,
+                        crt_base_size, dim, run, ms_double.count(), entry.first);
 
                 // clean up
                 for (auto label : *g_inputs) {
@@ -426,7 +373,7 @@ int main() {
 
         wandb_t q_const = 0.0001;
         vector<size_t> dims{128, 512, 2048};
-        bench_dense_cpu(runs, q_const, dims, fpt);
+        // bench_dense_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }
     //
@@ -444,7 +391,7 @@ int main() {
 
         wandb_t q_const = 0.0001;
         vector<size_t> dims{64, 128, 256};
-        bench_conv2d_cpu(runs, q_const, dims, fpt);
+        // bench_conv2d_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }
     //
@@ -462,7 +409,7 @@ int main() {
                 "relu_acc\n");
         wandb_t q_const = 0.0001;
         vector<size_t> dims{128, 2048, 16384};
-        bench_approx_relu_cpu(runs, q_const, dims, fpt);
+        // bench_approx_relu_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }
     //
@@ -478,7 +425,7 @@ int main() {
         fprintf(fpt, "type, nr_threads, crt_base_size, dims, run, runtime\n");
         wandb_t q_const = 0.0001;
         vector<size_t> dims{128, 2048, 16384};
-        bench_sign_activation_cpu(runs, q_const, dims, fpt);
+        // bench_sign_activation_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }
     //
@@ -491,10 +438,11 @@ int main() {
     {
         std::string filename = path + date_string + "_rescaling.csv";
         fpt = fopen(filename.c_str(), "w+");
-        fprintf(fpt, "type, nr_threads, crt_base_size, dims, run, runtime\n");
+        fprintf(fpt, "type, nr_threads, crt_base_size, dims, run, runtime, use_legacy_scaling\n");
         wandb_t q_const = 0.0001;
-        vector<size_t> dims{128, 2048, 16384};
-        bench_rescale_cpu(runs, q_const, dims, fpt);
+        vector<size_t> dims{128};//, 2048, 16384};
+        // bench_rescale_cpu(runs, q_const, dims, fpt, true);
+        // bench_rescale_cpu(runs, q_const, dims, fpt, false);
         fclose(fpt);
     }
     //
@@ -507,10 +455,10 @@ int main() {
     {
         std::string filename = path + date_string + "_rescaling_scaling_factor.csv";
         fpt = fopen(filename.c_str(), "w+");
-        fprintf(fpt, "type, scaling_factor, crt_base_size, dims, run, runtime\n");
+        fprintf(fpt, "type, crt_base_size, dims, run, runtime, l\n");
         wandb_t q_const = 0.0001;
-        vector<size_t> dims{128, 2048, 16384};
-        bench_rescale_cpu_scaling_factor(gen, runs, q_const, dims, fpt);
+        vector<size_t> dims{128};//, 2048, 16384};
+        bench_rescale_scaling_factor_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }
     //

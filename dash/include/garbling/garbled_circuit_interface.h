@@ -519,7 +519,7 @@ class GarbledCircuitInterface {
             cudaCheckError(cudaMalloc(
                 reinterpret_cast<void**>(&m_dev_upshift_labels[i]), size));
             cudaCheckError(cudaMemcpy(m_dev_upshift_labels[i],
-                                      get_upshift_label(i).get_components(),
+                                      get_upshift_label(i)->get_components(),
                                       size, cudaMemcpyHostToDevice));
         }
         cudaCheckError(cudaMemcpy(m_dev_dev_upshift_labels,
@@ -531,11 +531,11 @@ class GarbledCircuitInterface {
             reinterpret_cast<void**>(&m_dev_dev_downshift_labels), size));
         m_dev_downshift_labels = new crt_val_t*[m_crt_base.size()];
         for (size_t i = 0; i < m_crt_base.size(); ++i) {
-            size_t size = get_downshift_label({2}, i).size() * sizeof(crt_val_t); // FM 30.10.24: previously, m_downshift_labels contained only one element (for s = 2 = base.at(0))
+            size_t size = get_downshift_label({2}, i)->size() * sizeof(crt_val_t); // FM 30.10.24: previously, m_downshift_labels contained only one element (for s = 2 = base.at(0))
             cudaCheckError(cudaMalloc(
                 reinterpret_cast<void**>(&m_dev_downshift_labels[i]), size));
             cudaCheckError(cudaMemcpy(m_dev_downshift_labels[i],
-                                      get_downshift_label({2}, i).get_components(), // FM 30.10.24: previously, m_downshift_labels contained only one element (for s = 2 = base.at(0))
+                                      get_downshift_label({2}, i)->get_components(), // FM 30.10.24: previously, m_downshift_labels contained only one element (for s = 2 = base.at(0))
                                       size, cudaMemcpyHostToDevice));
         }
         cudaCheckError(cudaMemcpy(m_dev_dev_downshift_labels,
@@ -657,7 +657,7 @@ class GarbledCircuitInterface {
             ocall_cudaMalloc(reinterpret_cast<void**>(&m_dev_upshift_labels[i]),
                              size);
             sgx_cudaMemcpyToDevice(m_dev_upshift_labels[i],
-                                   get_upshift_label(i).get_components(), size);
+                                   get_upshift_label(i)->get_components(), size);
         }
         ocall_cudaMemcpyToDevicePtr(
             reinterpret_cast<void**>(m_dev_dev_upshift_labels),
@@ -669,11 +669,11 @@ class GarbledCircuitInterface {
         ocall_alloc_ptr_array(
             reinterpret_cast<void***>(&m_dev_downshift_labels), size);
         for (size_t i = 0; i < m_crt_base.size(); ++i) {
-            int size = get_downshift_label({2}, i).size() * sizeof(crt_val_t); // FM 30.10.24: previously, m_downshift_labels contained only one element (for s = 2 = base.at(0))
+            int size = get_downshift_label({2}, i)->size() * sizeof(crt_val_t); // FM 30.10.24: previously, m_downshift_labels contained only one element (for s = 2 = base.at(0))
             ocall_cudaMalloc(
                 reinterpret_cast<void**>(&m_dev_downshift_labels[i]), size);
             sgx_cudaMemcpyToDevice(m_dev_downshift_labels[i],
-                                   get_downshift_label({2}, i).get_components(),
+                                   get_downshift_label({2}, i)->get_components(),
                                    size);
         }
         ocall_cudaMemcpyToDevicePtr(
@@ -777,37 +777,37 @@ class GarbledCircuitInterface {
     crt_val_t get_max_modulus() const { return m_max_modulus; }
     LookupApproxSign* get_lookup_approx_sign() { return m_lookup_approx_sign; }
 
-    LabelTensor get_upshift_label_base(size_t modulus_idx) {
-        return *m_upshift_labels_base.at(modulus_idx);
+    LabelTensor *get_upshift_label_base(size_t modulus_idx) {
+        return m_upshift_labels_base.at(modulus_idx);
     }
 
-    LabelTensor get_upshift_label(size_t modulus_idx) {
-        return *m_upshift_labels.at(modulus_idx);
+    LabelTensor *get_upshift_label(size_t modulus_idx) {
+        return m_upshift_labels.at(modulus_idx);
     }
 
-    LabelTensor get_downshift_label_base(const vector<crt_val_t> scaling_factors, size_t modulus_idx) {
+    LabelTensor *get_downshift_label_base(const vector<crt_val_t> scaling_factors, size_t modulus_idx) {
         const auto scaling_factors_prod = std::accumulate(scaling_factors.begin(), scaling_factors.end(), 1, std::multiplies<crt_val_t>());
 
         if (m_downshift_labels_base.find(scaling_factors_prod) != m_downshift_labels_base.end()) {
-            return *m_downshift_labels_base.at(scaling_factors_prod).at(modulus_idx);
+            return m_downshift_labels_base.at(scaling_factors_prod).at(modulus_idx);
         }
         else {
             const auto labels = create_downshift_base_labels();
             m_downshift_labels_base[scaling_factors_prod] = labels;
-            return *labels.at(modulus_idx);
+            return labels.at(modulus_idx);
         }
     }
 
-    LabelTensor get_downshift_label(const vector<crt_val_t> scaling_factors, size_t modulus_idx) {
+    LabelTensor *get_downshift_label(const vector<crt_val_t> scaling_factors, size_t modulus_idx) {
         const auto scaling_factors_prod = std::accumulate(scaling_factors.begin(), scaling_factors.end(), 1, std::multiplies<crt_val_t>());
 
         if (m_downshift_labels.find(scaling_factors_prod) != m_downshift_labels.end()) {
-            return *m_downshift_labels.at(scaling_factors_prod).at(modulus_idx);
+            return m_downshift_labels.at(scaling_factors_prod).at(modulus_idx);
         }
         else {
             const auto labels = create_downshift_labels(scaling_factors);
             m_downshift_labels[scaling_factors_prod] = labels;
-            return *labels.at(modulus_idx);
+            return labels.at(modulus_idx);
         }
     }
 
@@ -974,7 +974,7 @@ class GarbledCircuitInterface {
         for (size_t i = 0; i < m_crt_base.size(); ++i) {
             labels.at(i) = new LabelTensor{get_label_offset(m_crt_base.at(i))};
             *labels.at(i) *= util::modulo(m_crt_modulus / (2 * prod_scaling_factors), m_crt_base.at(i));
-            *labels.at(i) += get_downshift_label_base(scaling_factors, i);
+            *labels.at(i) += *get_downshift_label_base(scaling_factors, i);
         }
 
         return labels;

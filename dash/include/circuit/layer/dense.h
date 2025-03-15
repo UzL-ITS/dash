@@ -27,7 +27,7 @@ class Dense : public Layer {
     wandb_t m_q_const;
 
    public:
-    Dense(ScalarTensor<wandb_t> weights, ScalarTensor<wandb_t> biases,
+    Dense(ScalarTensor<wandb_t> weights, ScalarTensor<wandb_t> biases, int ql,
           QuantizationMethod q_method = QuantizationMethod::SimpleQuant,
           wandb_t q_const = 10, int channel_tf = 0)
         : Layer(dim_t{weights.get_dims().at(1)},
@@ -45,9 +45,9 @@ class Dense : public Layer {
                 ScalarTensor<q_val_t>::quantize(biases, q_method, q_const);
         } else {
             m_q_weights =
-                ScalarTensor<q_val_t>::quantize(weights, q_method, QL);
+                ScalarTensor<q_val_t>::quantize(weights, q_method, ql);
             m_q_biases =
-                ScalarTensor<q_val_t>::quantize(biases, q_method, 2 * QL);
+                ScalarTensor<q_val_t>::quantize(biases, q_method, 2 * ql);
         }
         m_q_method = q_method;
         m_q_const = q_const;

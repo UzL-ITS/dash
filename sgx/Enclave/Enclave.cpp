@@ -69,7 +69,7 @@ void print_label(LabelTensor* l) {
 //     ScalarTensor<wandb_t> weights{{10,20,30,40,50,60}, dim_t{3,2}};
 //     ScalarTensor<wandb_t> biases{{50,60,70}, dim_t{3}};
 
-//     auto circuit = new Circuit{new Dense{weights, biases,
+//     auto circuit = new Circuit{new Dense{weights, biases, QL,
 //     QuantizationMethod::SimpleQuant, 10}}; auto gc = new
 //     GarbledCircuit(circuit, 8); gc->cuda_move(); auto
 //     g_inputs{gc->garble_inputs(inputs)}; auto
@@ -141,7 +141,7 @@ void ecall_ann_infer(void* inputs_tmp) {
     auto circuit = new Circuit{new Conv2d(
         weights_t, bias_t, input_width, input_height, channel, filter,
         filter_width, filter_height, stride_width, stride_height,
-        QuantizationMethod::SimpleQuant, 10)};
+        QL, QuantizationMethod::SimpleQuant, 10)};
 
     auto gc = new GarbledCircuit(circuit, 8);
     gc->cuda_move();

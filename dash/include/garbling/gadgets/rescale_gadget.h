@@ -120,6 +120,15 @@ public:
         dim_t output_dims = in_label->at(0)->get_dims();
         vector<size_t> ignored_modulus_indices = {};
 
+        // Cache upshift and downshift labels
+        vector<LabelTensor *> cached_upshift_labels(crt_base_size, nullptr);
+        vector<LabelTensor *> cached_downshift_labels(crt_base_size, nullptr);
+        for (size_t j = 0; j < crt_base_size; ++j)
+        {
+            cached_upshift_labels[j] = m_gc->get_upshift_label_base(j);
+            cached_downshift_labels[j] = m_gc->get_downshift_label_base(m_scaling_factors, j);
+        }
+
         m_proj_gates_trans_mod = vector<vector<vector<ProjectionGate *>>>{
             factor_count,
             vector<vector<ProjectionGate *>>{
@@ -127,14 +136,14 @@ public:
                 vector<ProjectionGate *>(m_input_size, nullptr)}};
         size_t proj_cipher_cnt = 0;
 
-        // Step 1: Upshift by max_crt_modulus / 2
+        // Step 1: Upshift by max_crt_modulus / 2 using cached upshift labels
         for (size_t i = 0; i < m_input_size; ++i)
         {
             for (size_t j = 0; j < crt_base_size; ++j)
             {
                 crt_val_t modulus = m_gc->get_crt_base().at(j);
                 LabelTensor input_label{in_label->at(j)->get_label(i)};
-                input_label += m_gc->get_upshift_label_base(j);
+                input_label += *cached_upshift_labels[j];
                 out_label->at(j)->set_label(input_label.get_label(0), i);
             }
         }
@@ -219,14 +228,14 @@ public:
             m_be_gadget->garble(out_label, out_label);
         }
 
-        // Step 4: Downshift by max_crt_modulus / (2 * scaling_factor)
+        // Step 4: Downshift by max_crt_modulus / (2 * scaling_factor) using cached downshift labels
         for (size_t i = 0; i < m_input_size; ++i)
         {
             for (size_t j = 0; j < crt_base_size; ++j)
             {
                 crt_val_t modulus = m_gc->get_crt_base().at(j);
                 LabelTensor input_label{out_label->at(j)->get_label(i)};
-                input_label -= m_gc->get_downshift_label_base(m_scaling_factors, j);
+                input_label -= *cached_downshift_labels[j];
                 out_label->at(j)->set_label(input_label.get_label(0), i);
             }
         }
@@ -240,18 +249,26 @@ public:
         dim_t output_dims = encoded_inputs->at(0)->get_dims();
         vector<size_t> ignored_modulus_indices = {};
 
+        // Cache upshift and downshift labels
+        vector<LabelTensor*> cached_upshift_labels(crt_base_size, nullptr);
+        vector<LabelTensor*> cached_downshift_labels(crt_base_size, nullptr);
+        for (size_t j = 0; j < crt_base_size; ++j)
+        {
+            cached_upshift_labels[j] = m_gc->get_upshift_label(j);
+            cached_downshift_labels[j] = m_gc->get_downshift_label(m_scaling_factors, j);
+        }
+
         // Step 1: Upshift by max_crt_modulus / 2
-        // TODO: get_upshift_label is very inefficient
-#ifndef SGX
-#pragma omp parallel for num_threads(nr_threads)
-#endif
+        #ifndef SGX
+        #pragma omp parallel for num_threads(nr_threads)
+        #endif
         for (size_t i = 0; i < m_input_size; ++i)
         {
             for (size_t j = 0; j < crt_base_size; ++j)
             {
                 crt_val_t modulus = m_gc->get_crt_base().at(j);
                 LabelTensor input_label{encoded_inputs->at(j)->get_label(i)};
-                input_label += m_gc->get_upshift_label(j);
+                input_label += *cached_upshift_labels[j];
                 out_label->at(j)->set_label(input_label.get_label(0), i);
             }
         }
@@ -329,14 +346,16 @@ public:
         }
 
         // Step 4: Downshift by max_crt_modulus / (2 * scaling_factor)
-        //TODO: paralellize, get_downshift_label is very inefficient
+#ifndef SGX
+#pragma omp parallel for
+#endif
         for (size_t i = 0; i < m_input_size; ++i)
         {
             for (size_t j = 0; j < crt_base_size; ++j)
             {
                 crt_val_t modulus = m_gc->get_crt_base().at(j);
                 LabelTensor input_label{out_label->at(j)->get_label(i)};
-                input_label -= m_gc->get_downshift_label(m_scaling_factors, j);
+                input_label -= *cached_downshift_labels[j];
                 out_label->at(j)->set_label(input_label.get_label(0), i);
             }
         }
