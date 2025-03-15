@@ -184,7 +184,6 @@ public:
         }
     }
 
-// TODO: re-enable parallel execution
     void cpu_evaluate(vector<LabelTensor *> *encoded_inputs,
                       vector<LabelTensor *> *out_label,
                       int nr_threads)

@@ -326,7 +326,6 @@ Circuit* create_circuit_from_onnx_model(onnx::ModelProto model,
             }
 
             // create layer
-            //TODO: add ql as a parameter
             auto conv = new Conv2d{weights_tensor, biases_tensor, input_width,
                                    input_height,   channel,       filter,
                                    filter_width,   filter_height, stride_width,
@@ -381,7 +380,7 @@ Circuit* load_onnx_model(
     // compatible with the version of the headers we compiled against.
     GOOGLE_PROTOBUF_VERIFY_VERSION;
 
-    const wandb_t q_const = 0.02; // TODO: make this a parameter
+    const wandb_t q_const = 0.02;
 
     auto model = parse_model_file(path);
     auto circuit = create_circuit_from_onnx_model(model, q_method, q_const, ql, qs);
