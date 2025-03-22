@@ -54,12 +54,13 @@ const std::map<int, std::vector<mrs_val_t>> OPTIMAL_MRS_BASES = {
     // Add more entries as needed
 };
 
-// scaling factors for different QL values in non-optimized CPM bases, precomputed by the ReDASH authors
-// IMPORTANT: Assumes crt_base_size = 8!
+// scaling factors for different QL values in non-optimized CPM base
+// always the next bigger prime to 2^l if such a prime exists, otherwise a combination with 2
+// IMPORTANT: Assumes crt_base_size = 8
 const std::map<int, std::vector<int>> SCALING_FACTORS_CPM_BASES = {
-    {3, {}},
-    {4, {}},
-    {5, {}}
+    {3, {11}},
+    {4, {17}},
+    {5, {2, 17}}
     // Add more entries as needed
 };
 

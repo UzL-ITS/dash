@@ -211,7 +211,7 @@ public:
             l_w.at(i) = LabelTensor{m_out_moduli_swapped.at(i), encoded_inputs->at(0)->get_dims()};
 
 #ifndef SGX
-#pragma omp parallel for
+#pragma omp parallel for num_threads(nr_threads)
 #endif
             for (size_t input_idx = 0; input_idx < M_NR_INPUTS; ++input_idx)
             {
@@ -226,7 +226,7 @@ public:
             for (size_t j = 0; j < M_EXTENDED_CRT_BASE_SIZE - i - 1; ++j)
             {
 #ifndef SGX
-#pragma omp parallel for
+#pragma omp parallel for num_threads(nr_threads)
 #endif
                 for (size_t input_idx = 0; input_idx < M_NR_INPUTS; ++input_idx)
                 {
@@ -249,7 +249,7 @@ public:
             if (std::find(M_EXTRA_MODULI_INDICES.begin(), M_EXTRA_MODULI_INDICES.end(), i) != M_EXTRA_MODULI_INDICES.end())
             {
 #ifndef SGX
-#pragma omp parallel for
+#pragma omp parallel for num_threads(nr_threads)
 #endif
                 for (size_t input_idx = 0; input_idx < M_NR_INPUTS; ++input_idx)
                 {
@@ -265,7 +265,7 @@ public:
             else
             {
 #ifndef SGX
-#pragma omp parallel for
+#pragma omp parallel for num_threads(nr_threads)
 #endif
                 for (size_t input_idx = 0; input_idx < M_NR_INPUTS; ++input_idx)
                 {

@@ -196,7 +196,7 @@ public:
         for (const auto ignored_idx : ignored_modulus_indices)
         {
 #ifndef SGX
-#pragma omp parallel for
+#pragma omp parallel for 
 #endif
             for (size_t i = 0; i < m_input_size; ++i)
             {
@@ -285,7 +285,7 @@ public:
                 if (std::find(ignored_modulus_indices.begin(), ignored_modulus_indices.end(), j) == ignored_modulus_indices.end())
                 {
 #ifndef SGX
-#pragma omp parallel for
+#pragma omp parallel for num_threads(nr_threads)
 #endif
                     for (size_t k = 0; k < m_input_size; ++k)
                     {
@@ -316,7 +316,7 @@ public:
         for (const auto ignored_idx : ignored_modulus_indices)
         {
 #ifndef SGX
-#pragma omp parallel for
+#pragma omp parallel for num_threads(nr_threads)
 #endif
             for (size_t i = 0; i < m_input_size; ++i)
             {
@@ -347,7 +347,7 @@ public:
 
         // Step 4: Downshift by max_crt_modulus / (2 * scaling_factor)
 #ifndef SGX
-#pragma omp parallel for
+#pragma omp parallel for num_threads(nr_threads)
 #endif
         for (size_t i = 0; i < m_input_size; ++i)
         {
