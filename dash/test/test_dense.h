@@ -7,6 +7,7 @@
 
 #define QUANTIZATION_CONSTANT 10
 #define QUANTIZATION_METHOD QuantizationMethod::SimpleQuant
+#define QUANTIZATION_PARAM -1
 
 #include "circuit/circuit.h"
 #include "circuit/layer/dense.h"
@@ -28,7 +29,7 @@ class TestSingleDense : public ::testing::TestWithParam<dense_params> {
     Circuit* m_circuit;
     GarbledCircuit* m_gc;
     void SetUp() override {
-        auto dense1{new Dense{GetParam().weights, GetParam().biases, 5,
+        auto dense1{new Dense{GetParam().weights, GetParam().biases, QUANTIZATION_PARAM,
                               QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
         m_circuit = new Circuit{dense1};
         m_gc = new GarbledCircuit{m_circuit, 8};
@@ -45,9 +46,9 @@ class TestTwoDense : public ::testing::TestWithParam<dense_params> {
     Circuit* m_circuit;
     GarbledCircuit* m_gc;
     void SetUp() override {
-        auto dense1{new Dense{GetParam().weights, GetParam().biases, 5,
+        auto dense1{new Dense{GetParam().weights, GetParam().biases, QUANTIZATION_PARAM,
                               QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
-        auto dense2{new Dense{GetParam().weights, GetParam().biases, 5,
+        auto dense2{new Dense{GetParam().weights, GetParam().biases, QUANTIZATION_PARAM,
                               QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
         m_circuit = new Circuit{dense1, dense2};
         m_gc = new GarbledCircuit{m_circuit, 8};

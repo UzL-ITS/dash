@@ -463,12 +463,13 @@ class ScalarTensor {
     }
 
     static ScalarTensor<T> quantize(ScalarTensor<wandb_t>& values,
-                                    QuantizationMethod q_method, int l) {
-        assert(q_method == QuantizationMethod::ScaleQuant &&
-               "ScaleQuant requires a quantization constant of type int.");
+                                    QuantizationMethod q_method, int s) {
+        assert(q_method == QuantizationMethod::ScaleQuant ||
+               q_method == QuantizationMethod::ScaleQuantPlus &&
+               "ScaleQuant(+) requires a quantization constant of type int.");
         ScalarTensor<T> result{values.get_dims()};
         for (size_t i = 0; i < values.size(); ++i) {
-            result.push_back(std::llround(values.at(i) * std::pow(2, l)));
+            result.push_back(values.at(i) * s);
         }
         return result;
     }

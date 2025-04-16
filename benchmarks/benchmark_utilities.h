@@ -23,7 +23,7 @@ typedef struct infer_config {
     std::string model_name;
     std::string model_file;
     QuantizationMethod quantization_method;
-    int ql;
+    int q_parameter; // this is l for ScaleQuant, s for ScaleQuantPlus, ignored for SimpleQuant
     bool optimize_bases;
 } infer_config_t;
 

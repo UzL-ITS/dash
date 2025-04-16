@@ -82,7 +82,7 @@ void bench_dense_cpu(int runs, wandb_t q_const,
                     inputs_q.data(), inputs_q.get_dims());
 
                 auto circuit = new Circuit{new Dense{
-                    weights, biases, 5, QuantizationMethod::SimpleQuant, q_const}};
+                    weights, biases, -1, QuantizationMethod::SimpleQuant, q_const}};
                 auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
                 int crt_base_size = circuit->infer_crt_base_size(inputs_q);
                 auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -264,89 +264,47 @@ void bench_sign_activation_cpu(int runs, wandb_t q_const,
 }
 
 void bench_rescale_cpu(int runs, wandb_t q_const,
-                       vector<size_t> dims, FILE* fpt, bool use_legacy_scaling) {
+                       vector<size_t> dims, FILE* fpt) {
+    int crt_base_size = 8;
     for (auto dim : dims) {
-        for (int nr_threads = 1; nr_threads <= 16; ++nr_threads) {
-            printf("Rescale Layer (CPU), nr_threads: %d\n", nr_threads);
-            if(use_legacy_scaling) {
-                printf("Using legacy scaling\n");
-            } else {
-                printf("Using new scaling\n");
-            }
+        for(int l = 1; l <= 5; ++l) {
+            // Standard CRT base but with scaling factor at index 0
+            auto crt_base = util::sieve_of_eratosthenes<crt_val_t>(crt_base_size);
+            const crt_val_t scaling_factor = 1 << l;
+            crt_base.at(0) = scaling_factor;
 
-            for (int run = 0; run < runs; ++run) {
-                auto inputs_q = init_inputs(dim_t{dim});
+            // Standard MRS base for k=8, 100% accuracy
+            const vector<mrs_val_t> mrs_base= {98, 9, 8, 8, 7, 5};
+            for (int nr_threads = 1; nr_threads <= 16; ++nr_threads) {
+                printf("Rescale Layer (CPU), scaling factor: %d, nr_threads: %d\n", scaling_factor, nr_threads);
+                for (int run = 0; run < runs; ++run) {
+                    auto inputs_q = init_inputs(dim_t{dim});
 
-                Circuit *circuit;
-                if(use_legacy_scaling) {
-                    circuit = new Circuit{new Rescale{1, inputs_q.get_dims()}};
-                } else {
-                    const vector<crt_val_t> s = {2};
-                    circuit = new Circuit{new Rescale{s, inputs_q.get_dims()}};
+                    const vector<crt_val_t> s = {scaling_factor};
+                    auto circuit = new Circuit{new Rescale{s, inputs_q.get_dims()}};
+
+                    auto gc = new GarbledCircuit(circuit, crt_base, mrs_base);
+                    auto g_inputs{gc->garble_inputs(inputs_q)};
+                    auto t1 = high_resolution_clock::now();
+                    auto g_outputs{gc->cpu_evaluate(g_inputs, nr_threads)};
+                    auto t2 = high_resolution_clock::now();
+                    auto outputs{gc->decode_outputs(g_outputs)};
+                    // outputs.print();
+
+                    duration<double, std::milli> ms_double = t2 - t1;
+
+                    fprintf(fpt, "CPU, %d, %d, %lu, %d, %d, %f\n", nr_threads,
+                            crt_base_size, dim, l, run, ms_double.count());
+
+                    // clean up
+                    for (auto label : *g_inputs) {
+                        delete label;
+                    }
+                    delete g_inputs;
+
+                    delete circuit;
+                    delete gc;
                 }
-
-                int crt_base_size = 8;
-
-                auto gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
-                auto g_inputs{gc->garble_inputs(inputs_q)};
-                auto t1 = high_resolution_clock::now();
-                auto g_outputs{gc->cpu_evaluate(g_inputs, nr_threads)};
-                auto t2 = high_resolution_clock::now();
-                auto outputs{gc->decode_outputs(g_outputs)};
-                // outputs.print();
-
-                duration<double, std::milli> ms_double = t2 - t1;
-
-                fprintf(fpt, "CPU, %d, %d, %lu, %d, %f, %d\n", nr_threads,
-                        crt_base_size, dim, run, ms_double.count(), use_legacy_scaling);
-
-                // clean up
-                for (auto label : *g_inputs) {
-                    delete label;
-                }
-                delete g_inputs;
-
-                delete circuit;
-                delete gc;
-            }
-        }
-    }
-}
-
-void bench_rescale_scaling_factor_cpu(int runs, wandb_t q_const,
-                                      vector<size_t> dims, FILE* fpt) {
-    for (auto dim : dims) {
-        for (const auto& entry : SCALING_FACTORS_CPM_BASES) {
-            const vector<crt_val_t> scaling_factors(entry.second.begin(), entry.second.end());
-            printf("Rescale Layer Scaling Factor (CPU), l: %d\n", entry.first);
-
-            for (int run = 0; run < runs; ++run) {
-                auto inputs_q = init_inputs(dim_t{dim});
-                auto circuit = new Circuit{new Rescale{scaling_factors, inputs_q.get_dims()}};
-
-                int crt_base_size = 8;
-
-                auto gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
-                auto g_inputs{gc->garble_inputs(inputs_q)};
-                auto t1 = high_resolution_clock::now();
-                auto g_outputs{gc->cpu_evaluate(g_inputs, 16)};
-                auto t2 = high_resolution_clock::now();
-                auto outputs{gc->decode_outputs(g_outputs)};
-                // outputs.print();
-
-                duration<double, std::milli> ms_double = t2 - t1;
-
-                fprintf(fpt, "CPU, %d, %d, %lu, %d, %f, %d\n", 1,
-                        crt_base_size, dim, run, ms_double.count(), entry.first);
-
-                // clean up
-                for (auto label : *g_inputs) {
-                    delete label;
-                }
-                delete g_inputs;
-
-                delete circuit;
-                delete gc;
             }
         }
     }
@@ -373,7 +331,7 @@ int main() {
 
         wandb_t q_const = 0.0001;
         vector<size_t> dims{128, 512, 2048};
-        // bench_dense_cpu(runs, q_const, dims, fpt);
+        bench_dense_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }
     //
@@ -391,7 +349,7 @@ int main() {
 
         wandb_t q_const = 0.0001;
         vector<size_t> dims{64, 128, 256};
-        // bench_conv2d_cpu(runs, q_const, dims, fpt);
+        bench_conv2d_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }
     //
@@ -409,7 +367,7 @@ int main() {
                 "relu_acc\n");
         wandb_t q_const = 0.0001;
         vector<size_t> dims{128, 2048, 16384};
-        // bench_approx_relu_cpu(runs, q_const, dims, fpt);
+        bench_approx_relu_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }
     //
@@ -425,7 +383,7 @@ int main() {
         fprintf(fpt, "type, nr_threads, crt_base_size, dims, run, runtime\n");
         wandb_t q_const = 0.0001;
         vector<size_t> dims{128, 2048, 16384};
-        // bench_sign_activation_cpu(runs, q_const, dims, fpt);
+        bench_sign_activation_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }
     //
@@ -438,27 +396,10 @@ int main() {
     {
         std::string filename = path + date_string + "_rescaling.csv";
         fpt = fopen(filename.c_str(), "w+");
-        fprintf(fpt, "type, nr_threads, crt_base_size, dims, run, runtime, use_legacy_scaling\n");
+        fprintf(fpt, "type, nr_threads, crt_base_size, dims, l, run, runtime\n");
         wandb_t q_const = 0.0001;
-        vector<size_t> dims{128};//, 2048, 16384};
-        // bench_rescale_cpu(runs, q_const, dims, fpt, true);
-        // bench_rescale_cpu(runs, q_const, dims, fpt, false);
-        fclose(fpt);
-    }
-    //
-    //
-    //
-
-    //
-    //
-    // Benchmark: Rescale scaling factor
-    {
-        std::string filename = path + date_string + "_rescaling_scaling_factor.csv";
-        fpt = fopen(filename.c_str(), "w+");
-        fprintf(fpt, "type, crt_base_size, dims, run, runtime, l\n");
-        wandb_t q_const = 0.0001;
-        vector<size_t> dims{128};//, 2048, 16384};
-        bench_rescale_scaling_factor_cpu(runs, q_const, dims, fpt);
+        vector<size_t> dims {256, 512, 1024, 4096, 8192};
+        bench_rescale_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }
     //

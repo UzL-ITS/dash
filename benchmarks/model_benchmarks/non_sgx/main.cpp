@@ -20,26 +20,31 @@ void bench_model_cpu(Circuit* circuit,
                      std::string model_dir, infer_config_t config, FILE* fpt) {
     printf("NON SGX: Bench (CPU) Model: %s\n", config.model_name.c_str());
 
-    const int ql = circuit->get_ql();
-    printf("---ql: %d\n", ql);
-
-    if (config.optimize_bases) {
-        printf("---Using optimized bases.\n");
-    } else {
-        printf("---Not using optimized bases.\n");
-    }
-
-
     for (auto relu_acc : config.relu_accs) {
-        printf("---Relu Accuracy: %f\n", relu_acc);
         vector<unsigned long> infered_labels;
         for (int i = 0; i < nr_inputs; ++i) {
             auto inputs = input_images.at(i);
             
             GarbledCircuit* gc;
             if(config.optimize_bases) {
-                const auto max_modulus = OPTIMAL_CRT_BASES.at(ql).back();
-                gc = new GarbledCircuit(circuit, OPTIMAL_CRT_BASES.at(ql), OPTIMAL_MRS_BASES.at(ql), max_modulus);
+                std::vector<crt_val_t> opt_crt;
+                std::vector<mrs_val_t> opt_mrs;
+
+                if(config.model_name == "MODEL_F_GNNP_POOL_REPL") {
+                    opt_crt = {32, 53, 59};
+                    opt_mrs = {22, 21, 21, 19};
+                }
+                else if(config.model_name == "MODEL_F_MINIONN_POOL_REPL") {
+                    opt_crt = {32, 97, 107};
+                    opt_mrs = {22, 19, 15, 13};
+                }
+                else {
+                    throw std::runtime_error("Unknown model name for optimized bases.");
+                }
+
+                const auto max_modulus = opt_crt.back();
+                
+                gc = new GarbledCircuit(circuit, opt_crt, opt_mrs, max_modulus);
             }
             else {
                 gc = new GarbledCircuit(circuit, config.target_crt_base_size, relu_acc);
@@ -83,7 +88,7 @@ void bench_model_cpu(Circuit* circuit,
     }
 }
 
-//TODO: port to redash
+//TODO: port to redash once new scaling works on GPU
 // void bench_model_gpu(Circuit* circuit,
 //                      vector<ScalarTensor<q_val_t>> input_images,
 //                      vector<unsigned long> labels, int nr_inputs,
@@ -171,93 +176,49 @@ int main() {
 
     vector<infer_config_t> configs;
 
-    infer_config_t MODEL_A_config_OPT{
+    infer_config_t MODEL_A_config{
         .target_crt_base_size = 8,
         .relu_accs = {100.0},  //{100.0, 99.999, 99.99, 99.9, 99.0},
         .dataset = mnist_dataset,
         .model_name = "MODEL_A",
         .model_file = "MODEL_A",
-        .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 4,
-        .optimize_bases = true};
-    configs.push_back(MODEL_A_config_OPT);
-
-    infer_config_t MODEL_A_config_CPM{
-        .target_crt_base_size = 8,
-        .relu_accs = {100.0},  //{100.0, 99.999, 99.99, 99.9, 99.0},
-        .dataset = mnist_dataset,
-        .model_name = "MODEL_A",
-        .model_file = "MODEL_A",
-        .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 4,
+        .quantization_method = QuantizationMethod::SimpleQuant,
+        .q_parameter =  -1,
         .optimize_bases = false};
-    configs.push_back(MODEL_A_config_CPM);
+    configs.push_back(MODEL_A_config);
 
-    infer_config_t MODEL_B_POOL_REPL_config_OPT{
+    infer_config_t MODEL_B_POOL_REPL_config{
         .target_crt_base_size = 9,
         .relu_accs = {100.0},  //{100.0, 99.999, 99.99, 99.9, 99.0},
         .dataset = mnist_dataset,
         .model_name = "MODEL_B",
         .model_file = "MODEL_B",
-        .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 3,
-        .optimize_bases = true};
-    configs.push_back(MODEL_B_POOL_REPL_config_OPT);
-
-    infer_config_t MODEL_B_POOL_REPL_config_CPM{
-        .target_crt_base_size = 9,
-        .relu_accs = {100.0},  //{100.0, 99.999, 99.99, 99.9, 99.0},
-        .dataset = mnist_dataset,
-        .model_name = "MODEL_B",
-        .model_file = "MODEL_B",
-        .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 3,
+        .quantization_method = QuantizationMethod::SimpleQuant,
+        .q_parameter =  -1,
         .optimize_bases = false};
-    configs.push_back(MODEL_B_POOL_REPL_config_CPM);
+    configs.push_back(MODEL_B_POOL_REPL_config);
 
-    infer_config_t MODEL_C_config_OPT{
+    infer_config_t MODEL_C_config{
         .target_crt_base_size = 9,
         .relu_accs = {100.0},  //{100.0, 99.999, 99.99, 99.9, 99.0},
         .dataset = mnist_dataset,
         .model_name = "MODEL_C",
         .model_file = "MODEL_C",
-        .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 4,
-        .optimize_bases = true};
-    configs.push_back(MODEL_C_config_OPT);
-
-    infer_config_t MODEL_C_config_CPM{
-        .target_crt_base_size = 9,
-        .relu_accs = {100.0},  //{100.0, 99.999, 99.99, 99.9, 99.0},
-        .dataset = mnist_dataset,
-        .model_name = "MODEL_C",
-        .model_file = "MODEL_C",
-        .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 4,
+        .quantization_method = QuantizationMethod::SimpleQuant,
+        .q_parameter =  -1,
         .optimize_bases = false};
-    configs.push_back(MODEL_C_config_CPM);
+    configs.push_back(MODEL_C_config);
 
-    infer_config_t MODEL_D_POOL_REPL_config_OPT{
+    infer_config_t MODEL_D_POOL_REPL_config{
         .target_crt_base_size = 8,
         .relu_accs = {100.0},  //{100.0, 99.999, 99.99, 99.9, 99.0},
         .dataset = mnist_dataset,
         .model_name = "MODEL_D",
         .model_file = "MODEL_D",
-        .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 4,
-        .optimize_bases = true};
-    configs.push_back(MODEL_D_POOL_REPL_config_OPT);
-
-    infer_config_t MODEL_D_POOL_REPL_config_CPM{
-        .target_crt_base_size = 8,
-        .relu_accs = {100.0},  //{100.0, 99.999, 99.99, 99.9, 99.0},
-        .dataset = mnist_dataset,
-        .model_name = "MODEL_D",
-        .model_file = "MODEL_D",
-        .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 4,
+        .quantization_method = QuantizationMethod::SimpleQuant,
+        .q_parameter =  -1,
         .optimize_bases = false};
-    configs.push_back(MODEL_D_POOL_REPL_config_CPM);
+    configs.push_back(MODEL_D_POOL_REPL_config);
 
     infer_config_t MODEL_F_GNNP_POOL_REPL_config_OPT{
         .target_crt_base_size = 7,
@@ -265,8 +226,8 @@ int main() {
         .dataset = cifar10_dataset,
         .model_name = "MODEL_F_GNNP_POOL_REPL",
         .model_file = "MODEL_F_GNNP_POOL_REPL",
-        .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 5,
+        .quantization_method = QuantizationMethod::ScaleQuantPlus,
+        .q_parameter = 32,
         .optimize_bases = true};
     configs.push_back(MODEL_F_GNNP_POOL_REPL_config_OPT);
 
@@ -277,7 +238,7 @@ int main() {
         .model_name = "MODEL_F_GNNP_POOL_REPL",
         .model_file = "MODEL_F_GNNP_POOL_REPL",
         .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 5,
+        .q_parameter =  6,
         .optimize_bases = false};
     configs.push_back(MODEL_F_GNNP_POOL_REPL_config_CPM);
 
@@ -287,8 +248,8 @@ int main() {
         .dataset = cifar10_dataset,
         .model_name = "MODEL_F_MINIONN_POOL_REPL",
         .model_file = "MODEL_F_MINIONN_POOL_REPL",
-        .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 5,
+        .quantization_method = QuantizationMethod::ScaleQuantPlus,
+        .q_parameter =  32,
         .optimize_bases = true};
     configs.push_back(MODEL_F_MINIONN_POOL_REPL_config_OPT);
 
@@ -299,17 +260,16 @@ int main() {
         .model_name = "MODEL_F_MINIONN_POOL_REPL",
         .model_file = "MODEL_F_MINIONN_POOL_REPL",
         .quantization_method = QuantizationMethod::ScaleQuant,
-        .ql = 5,
+        .q_parameter =  6,
         .optimize_bases = false};
     configs.push_back(MODEL_F_MINIONN_POOL_REPL_config_CPM);
 
     for (size_t i = 0; i < configs.size(); ++i) {
         auto config = configs.at(i);
         std::string model_path = model_dir + config.model_file + ".onnx";
-        vector<int> qs = config.optimize_bases ? vector<int>{1 << config.ql} : SCALING_FACTORS_CPM_BASES.at(config.ql);
 
         Circuit* circuit =
-            load_onnx_model(model_path, config.quantization_method, config.ql, qs);
+            load_onnx_model(model_path, config.quantization_method, config.q_parameter);
 
         vector<ScalarTensor<wandb_t>> small_test_images;
         vector<unsigned long> small_test_labels;
@@ -327,8 +287,10 @@ int main() {
                                            0.0001);
             wandb_t q_const = circuit->get_q_const();
             small_test_images_q = quantize(small_test_images, config.quantization_method, q_const);
-        } else {
-            small_test_images_q = quantize(small_test_images, config.quantization_method, circuit->get_ql());
+        } else if (config.quantization_method == QuantizationMethod::ScaleQuant) {
+            small_test_images_q = quantize(small_test_images, config.quantization_method, 1 << circuit->get_q_parameter());
+        } else { // ScaleQuantPlus
+            small_test_images_q = quantize(small_test_images, config.quantization_method, circuit->get_q_parameter());
         }
 
         auto plain_test_acc = circuit->plain_test(small_test_images, small_test_labels);

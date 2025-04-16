@@ -186,10 +186,10 @@ vector<ScalarTensor<q_val_t>> quantize(vector<ScalarTensor<wandb_t>>& data,
 }
 
 vector<ScalarTensor<q_val_t>> quantize(vector<ScalarTensor<wandb_t>>& data,
-                                       QuantizationMethod q_method, int l) {
+                                       QuantizationMethod q_method, int s) {
     vector<ScalarTensor<q_val_t>> quantized_data;
     for (auto input : data) {
-        auto tensor = ScalarTensor<q_val_t>::quantize(input, q_method, l);
+        auto tensor = ScalarTensor<q_val_t>::quantize(input, q_method, s);
         quantized_data.push_back(tensor);
     }
 

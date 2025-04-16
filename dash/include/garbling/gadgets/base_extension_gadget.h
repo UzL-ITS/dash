@@ -74,8 +74,18 @@ public:
         assert(in_label->size() == M_EXTENDED_CRT_BASE_SIZE);
         assert(out_label->size() == M_EXTENDED_CRT_BASE_SIZE);
 
+        // Compute total cipher count dynamically:
+        size_t total_cipher_count = 0;
+        for (size_t i = 0; i < M_NON_EXTENDED_CRT_BASE_SIZE; ++i)
+        {
+            // For each i, we perform (M_EXTENDED_CRT_BASE_SIZE - i - 1) projections,
+            // and each projection uses m_out_moduli_swapped[i] number of __uint128_t's.
+            total_cipher_count += (M_EXTENDED_CRT_BASE_SIZE - i - 1) * m_out_moduli_swapped[i];
+        }
+        total_cipher_count *= M_NR_INPUTS;
+
         // 0. Allocate ciphers and resize gate vectors
-        m_proj_gates_base_change_loop_ciphers = new __uint128_t[M_NON_EXTENDED_CRT_BASE_SIZE * M_NON_EXTENDED_CRT_BASE_SIZE * M_NR_INPUTS * 100]; // TODO 100 is a placeholder for number of inputs  //TODO: update count
+        m_proj_gates_base_change_loop_ciphers = new __uint128_t[total_cipher_count];
         size_t bc_loop_cipher_cnt = 0;
         m_proj_gates_base_change_loop.resize(M_NON_EXTENDED_CRT_BASE_SIZE);
 

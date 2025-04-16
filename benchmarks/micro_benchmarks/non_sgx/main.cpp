@@ -88,7 +88,7 @@ void bench_dense_cpu(std::mt19937 gen, int runs, dim_t dims, wandb_t q_const,
                 inputs_q.data(), inputs_q.get_dims());
 
             auto circuit = new Circuit{new Dense{
-                weights, biases, 5, QuantizationMethod::SimpleQuant, q_const}};
+                weights, biases, -1, QuantizationMethod::SimpleQuant, q_const}};
             auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
             int crt_base_size = circuit->infer_crt_base_size(inputs_q);
             auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -131,7 +131,7 @@ void bench_dense_gpu(std::mt19937 gen, int runs, dim_t dims, wandb_t q_const,
                 inputs_q.data(), inputs_q.get_dims());
 
             auto circuit = new Circuit{new Dense{
-                weights, biases, 5, QuantizationMethod::SimpleQuant, q_const}};
+                weights, biases, -1, QuantizationMethod::SimpleQuant, q_const}};
             auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
             int crt_base_size = circuit->infer_crt_base_size(inputs_q);
             auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -200,7 +200,7 @@ void bench_conv2d_cpu(std::mt19937 gen, int runs, vector<dim_t> dims_vec,
             auto circuit = new Circuit{new Conv2d(
                 weights, bias, input_width, input_height, channel, filter,
                 filter_width, filter_height, stride_width, stride_height,
-                5, QuantizationMethod::SimpleQuant, q_const)};
+                -1, QuantizationMethod::SimpleQuant, q_const)};
             auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
             int crt_base_size = circuit->infer_crt_base_size(inputs_q);
             auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -488,11 +488,10 @@ void bench_sign_activation_gpu(std::mt19937 gen, int runs, dim_t dims,
 void bench_rescaling_cpu(std::mt19937 gen, int runs, dim_t dims,
                          wandb_t q_const, FILE* fpt, bool use_legacy_scaling) {
     for (auto dim : dims) {
-        printf("Rescaling Layer (CPU), dim: %lu\n", dim);
         if(use_legacy_scaling) {
-            printf("Using legacy scaling\n");
+            printf("Rescaling Layer (CPU) (DASH's old scaling), dim: %lu\n", dim);
         } else {
-            printf("Using new scaling\n");
+            printf("Rescaling Layer (CPU) (ReDASH's new scaling), dim: %lu\n", dim);
         }
         
         for (int run = 0; run < runs; ++run) {
@@ -597,8 +596,8 @@ int main() {
 
         wandb_t q_const = 0.0001;
         dim_t dims = {128, 256, 512, 1024, 2048};
-        bench_dense_cpu(gen, runs, dims, q_const, fpt);
-        bench_dense_gpu(gen, runs, dims, q_const, fpt);
+        // bench_dense_cpu(gen, runs, dims, q_const, fpt);
+        // bench_dense_gpu(gen, runs, dims, q_const, fpt);
 
         fclose(fpt);
     }
@@ -618,8 +617,8 @@ int main() {
 
         wandb_t q_const = 0.0001;
         vector<dim_t> dims_vec = {{64, 64, 3}, {128, 128, 3}, {256, 256, 3}};
-        bench_conv2d_cpu(gen, runs, dims_vec, q_const, fpt);
-        bench_conv2d_gpu(gen, runs, dims_vec, q_const, fpt);
+        // bench_conv2d_cpu(gen, runs, dims_vec, q_const, fpt);
+        // bench_conv2d_gpu(gen, runs, dims_vec, q_const, fpt);
         fclose(fpt);
     }
     //
@@ -637,8 +636,8 @@ int main() {
                 "q_acc, relu_acc\n");
         wandb_t q_const = 0.0001;
         dim_t dims = {128, 256, 512, 1024, 2048, 4096, 8192, 16384};
-        bench_approx_relu_cpu(gen, runs, dims, q_const, fpt);
-        bench_approx_relu_gpu(gen, runs, dims, q_const, fpt);
+        // bench_approx_relu_cpu(gen, runs, dims, q_const, fpt);
+        // bench_approx_relu_gpu(gen, runs, dims, q_const, fpt);
         fclose(fpt);
     }
     //
@@ -656,8 +655,8 @@ int main() {
                 "q_acc, sign_acc\n");
         wandb_t q_const = 0.0001;
         dim_t dims = {128, 256, 512, 1024, 2048, 4096, 8192, 16384};
-        bench_sign_activation_cpu(gen, runs, dims, q_const, fpt);
-        bench_sign_activation_gpu(gen, runs, dims, q_const, fpt);
+        // bench_sign_activation_cpu(gen, runs, dims, q_const, fpt);
+        // bench_sign_activation_gpu(gen, runs, dims, q_const, fpt);
         fclose(fpt);
     }
     //
@@ -677,7 +676,7 @@ int main() {
         dim_t dims = {128, 256, 512, 1024, 2048, 4096, 8192, 16384};
         bench_rescaling_cpu(gen, runs, dims, q_const, fpt, true);
         bench_rescaling_cpu(gen, runs, dims, q_const, fpt, false);
-        // bench_rescaling_gpu(gen, runs, dims, q_const, fpt);
+        // bench_rescaling_gpu(gen, runs, dims, q_const, fpt); // TODO: port to redash
         fclose(fpt);
     }
     //

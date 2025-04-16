@@ -954,7 +954,6 @@ class GarbledCircuitInterface {
         }
     }
 
-    //TODO: unify these 2 in style
     vector<LabelTensor * > create_downshift_base_labels() {
         auto labels = vector<LabelTensor * >{};
 
