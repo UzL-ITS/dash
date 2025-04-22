@@ -115,11 +115,20 @@ class GarbledConv2d : public GarbledLayer {
         free_out_label();
         m_out_label->resize(m_gc->get_crt_base().size());
         size_t crt_base_size = m_gc->get_crt_base().size();
-        for (size_t i = 0; i < crt_base_size; ++i) {
+        for (size_t i = 0; i < crt_base_size; ++i)
+        {
             auto l = *encoded_inputs->at(i);
             crt_val_t modulus{l.get_modulus()};
             auto zero_label = m_gc->get_zero_label(modulus);
-
+#ifdef LABEL_TENSOR_USE_EIGEN
+            m_out_label->at(i) = LabelTensor::conv2d_eigen(
+                l, zero_label, m_qe_weights, *m_qe_bias_label->at(i),
+                m_conv->get_input_width(), m_conv->get_input_height(),
+                m_conv->get_channel(), m_conv->get_filter(),
+                m_conv->get_filter_width(), m_conv->get_filter_height(),
+                m_conv->get_stride_width(), m_conv->get_stride_height(),
+                nr_threads);
+#else
             m_out_label->at(i) = LabelTensor::conv2d(
                 l, zero_label, m_qe_weights, *m_qe_bias_label->at(i),
                 m_conv->get_input_width(), m_conv->get_input_height(),
@@ -127,6 +136,7 @@ class GarbledConv2d : public GarbledLayer {
                 m_conv->get_filter_width(), m_conv->get_filter_height(),
                 m_conv->get_stride_width(), m_conv->get_stride_height(),
                 nr_threads);
+#endif
         }
 
         return m_out_label;
