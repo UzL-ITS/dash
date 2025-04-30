@@ -1,7 +1,6 @@
 // This is a non-sgx main for testing purposes.
 #include <random>
 #include <vector>
-#include <iostream>
 
 #include "circuit/circuit.h"
 #include "circuit/layer/conv2d.h"

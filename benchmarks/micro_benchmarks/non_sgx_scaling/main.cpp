@@ -143,7 +143,7 @@ void bench_conv2d_cpu(int runs, wandb_t q_const,
                 auto circuit = new Circuit{new Conv2d(
                     weights, bias, input_width, input_height, channel, filter,
                     filter_width, filter_height, stride_width, stride_height,
-                    5, QuantizationMethod::SimpleQuant, q_const)};
+                    -1, QuantizationMethod::SimpleQuant, q_const)};
                 auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
                 int crt_base_size = circuit->infer_crt_base_size(inputs_q);
                 auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -398,7 +398,7 @@ int main() {
         fpt = fopen(filename.c_str(), "w+");
         fprintf(fpt, "type, nr_threads, crt_base_size, dims, l, run, runtime\n");
         wandb_t q_const = 0.0001;
-        vector<size_t> dims {256, 512, 1024, 4096, 8192};
+        vector<size_t> dims {128, 256, 512, 1024, 2048, 4096, 8192, 16384};
         bench_rescale_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }

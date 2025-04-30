@@ -26,7 +26,7 @@ class Circuit {
     int m_q_parameter;
 
    public:
-    Circuit(std::initializer_list<Layer*> layer, int q_parameter = 5) // TODO: remove default q_parameter
+    Circuit(std::initializer_list<Layer*> layer, int q_parameter = -1)
         : m_q_parameter{q_parameter} {
         m_layer.reserve(layer.size());
         for (size_t i = 0; i < layer.size(); i++) {
@@ -42,7 +42,7 @@ class Circuit {
                             [](size_t a, size_t b) { return a * b; });
     }
 
-    Circuit(vector<Layer*> layer, int q_parameter = 5) // TODO: remove default q_parameter
+    Circuit(vector<Layer*> layer, int q_parameter = -1)
         : m_layer{layer}, m_q_parameter{q_parameter} {
         m_input_dims = m_layer.at(0)->get_input_dims();
         m_output_dims = m_layer[m_layer.size() - 1]->get_output_dims();
