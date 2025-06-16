@@ -857,7 +857,7 @@ class GarbledCircuitInterface {
         if (mrs_base.size() > 1)
             mrs_induced_max = (crt_base.size() + 1) * mrs_base.at(1);
         // approx_rex_gadget needs minimal modulus max(mrs_base)
-        mrs_induced_max = std::max(mrs_induced_max, mrs_base.at(0));
+        mrs_induced_max = std::max(mrs_induced_max, (crt_val_t) mrs_base.at(0));
         crt_val_t crt_induced_max = crt_base.at(0);
         crt_val_t max_modulus = std::max(mrs_induced_max, crt_induced_max);
         return max_modulus;

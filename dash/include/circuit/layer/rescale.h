@@ -44,7 +44,7 @@ public:
         ScalarTensor<q_val_t> output;
         if (m_use_sign_base_extension)
         {
-            output = ScalarTensor<q_val_t>::rescale(input, m_l);
+            output = ScalarTensor<q_val_t>::rescale(input, (crt_val_t) m_l);
         }
         else
         {
