@@ -196,7 +196,7 @@ class Conv2d : public Layer {
             m_q_weights =
                 ScalarTensor<q_val_t>::quantize(weights, q_method, q_parameter);
             m_q_biases =
-                ScalarTensor<q_val_t>::quantize(biases, q_method, q_parameter);
+                ScalarTensor<q_val_t>::quantize(biases, q_method, q_parameter * q_parameter);
         } else {
             assert(false && "Unknown quantization method");
         }
@@ -234,7 +234,9 @@ class Conv2d : public Layer {
           m_q_method{q_method},
           m_q_const{q_const} {}
 
+    //TODO: move quanitization from constructor to quantize method; or delete deprecated function
     void quantize(wandb_t q_const) override {
+        std::cerr << "DEPRECATED Conv2d::quantize(): Quantizing Conv2d layer with q_const: " << q_const << std::endl;
         m_q_const = q_const;
         m_q_weights = ScalarTensor<q_val_t>::quantize(
             m_weights, QuantizationMethod::SimpleQuant, q_const);

@@ -52,7 +52,7 @@ class Dense : public Layer {
             m_q_weights =
                 ScalarTensor<q_val_t>::quantize(weights, q_method, q_parameter);
             m_q_biases =
-                ScalarTensor<q_val_t>::quantize(biases, q_method, q_parameter);
+                ScalarTensor<q_val_t>::quantize(biases, q_method, q_parameter * q_parameter);
         } else {
             assert(false && "Unknown quantization method");
         }
@@ -71,7 +71,9 @@ class Dense : public Layer {
           m_q_const{q_const},
           m_channel_tf{channel_tf} {}
 
+    //FIXME: move quantization from constructor to quantize method
     void quantize(wandb_t q_const) override {
+        std::cout <<  "DEPRECATED: Quantizing Dense Layer with q_const: " << q_const << std::endl;
         m_q_const = q_const;
         m_q_weights = ScalarTensor<q_val_t>::quantize(
             m_weights, QuantizationMethod::SimpleQuant, q_const);
