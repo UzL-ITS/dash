@@ -264,7 +264,7 @@ void bench_conv2d_gpu(std::mt19937 gen, int runs, vector<dim_t> dims_vec,
             auto circuit = new Circuit{new Conv2d(
                 weights, bias, input_width, input_height, channel, filter,
                 filter_width, filter_height, stride_width, stride_height,
-                5, QuantizationMethod::SimpleQuant, q_const)};
+                -1, QuantizationMethod::SimpleQuant, q_const)};
             auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
             int crt_base_size = circuit->infer_crt_base_size(inputs_q);
             auto gc = new GarbledCircuit(circuit, crt_base_size);
