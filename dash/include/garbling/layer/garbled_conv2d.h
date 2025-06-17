@@ -120,7 +120,7 @@ class GarbledConv2d : public GarbledLayer {
             crt_val_t modulus{l.get_modulus()};
             auto zero_label = m_gc->get_zero_label(modulus);
 
-            m_out_label->at(i) = LabelTensor::conv2d_zero(
+            m_out_label->at(i) = LabelTensor::conv2d(
                 l, zero_label, m_qe_weights, *m_qe_bias_label->at(i),
                 m_conv->get_input_width(), m_conv->get_input_height(),
                 m_conv->get_channel(), m_conv->get_filter(),

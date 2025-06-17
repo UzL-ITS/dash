@@ -23,8 +23,11 @@ class Circuit {
     size_t m_output_size;
     vector<Layer*> m_layer;
 
+    int m_q_parameter;
+
    public:
-    Circuit(std::initializer_list<Layer*> layer) {
+    Circuit(std::initializer_list<Layer*> layer, int q_parameter = -1)
+        : m_q_parameter{q_parameter} {
         m_layer.reserve(layer.size());
         for (size_t i = 0; i < layer.size(); i++) {
             m_layer.push_back(layer.begin()[i]);
@@ -39,7 +42,8 @@ class Circuit {
                             [](size_t a, size_t b) { return a * b; });
     }
 
-    Circuit(vector<Layer*> layer) : m_layer{layer} {
+    Circuit(vector<Layer*> layer, int q_parameter = -1)
+        : m_layer{layer}, m_q_parameter{q_parameter} {
         m_input_dims = m_layer.at(0)->get_input_dims();
         m_output_dims = m_layer[m_layer.size() - 1]->get_output_dims();
         m_input_size =
@@ -289,7 +293,7 @@ class Circuit {
                 quantize(last_q_val);
                 return;
             }
-            printf("q_val: %.15f, crt_base_size: %d\n", q_val, crt_base_size);
+            // printf("q_val: %.15f, crt_base_size: %d\n", q_val, crt_base_size);
             if (crt_base_size > target_crt_base_size) {
                 if (is_equal(last_q_val, q_val + step_width)) step_width /= 2;
                 last_q_val = q_val;
@@ -302,7 +306,7 @@ class Circuit {
                 q_val -= step_width;
             }
             quantize(q_val);
-            printf("step_width: %.15f\n", step_width);
+            // printf("step_width: %.15f\n", step_width);
         }
     }
 
@@ -347,6 +351,8 @@ class Circuit {
     wandb_t get_range_plain_val() {
         return std::abs(get_max_plain_val()) + std::abs(get_min_plain_val());
     }
+
+    int get_q_parameter() const { return m_q_parameter; }
 
     void print() {
         for (auto layer : m_layer) {

@@ -15,6 +15,7 @@
 #include "test_scalar_tensor.h"
 #include "test_sign.h"
 #include "test_util.h"
+#include "test_maxpool2d.h"
 
 int main(int argc, char **argv) {
     init_cuda();

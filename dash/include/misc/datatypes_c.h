@@ -5,6 +5,8 @@
 #include <limits.h>
 #include <float.h>
 #include <stdlib.h>
+#include <map>
+#include <vector>
 
 #ifndef __SIZEOF_INT128__
 #error "__uint128_t not defined!"
@@ -24,7 +26,7 @@
 #define WANDB_VAL_MAX FLT_MAX
 #define WANDB_VAL_MIN FLT_MIN
 
-//#define QL 8
+// TODO: this is only used in legacy Enclave code, deploy Circuit::get_l() there, too
 #define QL 5
 
 typedef long long q_val_t;  // V

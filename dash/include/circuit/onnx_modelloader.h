@@ -155,7 +155,8 @@ int get_nr_channel_before_flatten(vector<Layer*> layer) {
 
 Circuit* create_circuit_from_onnx_model(onnx::ModelProto model,
                                         QuantizationMethod q_method,
-                                        wandb_t q_const) {
+                                        wandb_t q_const,
+                                        int q_parameter) {
     // get framwork name
     auto framework = model.producer_name();
 
@@ -238,10 +239,10 @@ Circuit* create_circuit_from_onnx_model(onnx::ModelProto model,
                 // create layer
                 if (channel > 0 && first_dense) {
                     first_dense = false;
-                    dense = new Dense(weights_tensor, biases_tensor, q_method,
+                    dense = new Dense(weights_tensor, biases_tensor, q_parameter, q_method,
                                       q_const, channel);
                 } else {
-                    dense = new Dense(weights_tensor, biases_tensor, q_method,
+                    dense = new Dense(weights_tensor, biases_tensor, q_parameter, q_method,
                                       q_const);
                 }
             } else {
@@ -255,12 +256,16 @@ Circuit* create_circuit_from_onnx_model(onnx::ModelProto model,
                     ScalarTensor<wandb_t>(biases, dim_t{output_dim});
                 // create layer
                 dense =
-                    new Dense(weights_tensor, biases_tensor, q_method, q_const);
+                    new Dense(weights_tensor, biases_tensor, q_parameter, q_method, q_const);
             }
-
             layer.push_back(dense);
+
             if (q_method == QuantizationMethod::ScaleQuant) {
-                Rescale* rescale = new Rescale(QL, dense->get_output_dims());
+                auto rescale = new Rescale(q_parameter, dense->get_output_dims());
+                layer.push_back(rescale);
+            } else if (q_method == QuantizationMethod::ScaleQuantPlus) {
+                vector<crt_val_t> qs = { static_cast<crt_val_t>(q_parameter) };
+                Rescale* rescale = new Rescale(qs, dense->get_output_dims());
                 layer.push_back(rescale);
             }
             next_layer_dim = dense->get_output_dims();
@@ -322,11 +327,16 @@ Circuit* create_circuit_from_onnx_model(onnx::ModelProto model,
             auto conv = new Conv2d{weights_tensor, biases_tensor, input_width,
                                    input_height,   channel,       filter,
                                    filter_width,   filter_height, stride_width,
-                                   stride_height,  q_method,      q_const};
+                                   stride_height,  q_parameter , q_method,      q_const};
 
             layer.push_back(conv);
+
             if (q_method == QuantizationMethod::ScaleQuant) {
-                auto rescale = new Rescale(QL, conv->get_output_dims());
+                auto rescale = new Rescale(q_parameter, conv->get_output_dims());
+                layer.push_back(rescale);
+            } else if (q_method == QuantizationMethod::ScaleQuantPlus) {
+                vector<crt_val_t> qs = { static_cast<crt_val_t>(q_parameter) };
+                Rescale* rescale = new Rescale(qs, conv->get_output_dims());
                 layer.push_back(rescale);
             }
             next_layer_dim = conv->get_output_dims();
@@ -353,21 +363,41 @@ Circuit* create_circuit_from_onnx_model(onnx::ModelProto model,
             layer.push_back(sign);
         }
     }
-    Circuit* circuit = new Circuit(layer);
+    Circuit* circuit = new Circuit(layer, q_parameter);
 
     return circuit;
 }
 
 Circuit* load_onnx_model(
     const std::string& path,
-    QuantizationMethod q_method = QuantizationMethod::SimpleQuant,
-    wandb_t q_const = 0.02) {
+    QuantizationMethod q_method,
+    int q_parameter) {
     // Verify that the version of the library that we linked against is
     // compatible with the version of the headers we compiled against.
     GOOGLE_PROTOBUF_VERIFY_VERSION;
 
+    const wandb_t q_const = 0.02;
+
     auto model = parse_model_file(path);
-    auto circuit = create_circuit_from_onnx_model(model, q_method, q_const);
+    auto circuit = create_circuit_from_onnx_model(model, q_method, q_const, q_parameter);
+
+    // Delete all global objects allocated by libprotobuf.
+    google::protobuf::ShutdownProtobufLibrary();
+
+    return circuit;
+}
+
+Circuit* load_onnx_model(const std::string& path) {
+    // Verify that the version of the library that we linked against is
+    // compatible with the version of the headers we compiled against.
+    GOOGLE_PROTOBUF_VERIFY_VERSION;
+
+    const auto q_method = QuantizationMethod::SimpleQuant;
+    const wandb_t q_const = 0.02;
+    const auto q_parameter = -1; // unused in SimpleQuant, but create_circuit_from_onnx_model needs it
+
+    auto model = parse_model_file(path);
+    auto circuit = create_circuit_from_onnx_model(model, q_method, q_const, q_parameter);
 
     // Delete all global objects allocated by libprotobuf.
     google::protobuf::ShutdownProtobufLibrary();

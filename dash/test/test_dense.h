@@ -6,6 +6,8 @@
 #include <vector>
 
 #define QUANTIZATION_CONSTANT 10
+#define QUANTIZATION_METHOD QuantizationMethod::SimpleQuant
+#define QUANTIZATION_PARAM -1
 
 #include "circuit/circuit.h"
 #include "circuit/layer/dense.h"
@@ -27,7 +29,7 @@ class TestSingleDense : public ::testing::TestWithParam<dense_params> {
     Circuit* m_circuit;
     GarbledCircuit* m_gc;
     void SetUp() override {
-        auto dense1{new Dense{GetParam().weights, GetParam().biases,
+        auto dense1{new Dense{GetParam().weights, GetParam().biases, QUANTIZATION_PARAM,
                               QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
         m_circuit = new Circuit{dense1};
         m_gc = new GarbledCircuit{m_circuit, 8};
@@ -44,9 +46,9 @@ class TestTwoDense : public ::testing::TestWithParam<dense_params> {
     Circuit* m_circuit;
     GarbledCircuit* m_gc;
     void SetUp() override {
-        auto dense1{new Dense{GetParam().weights, GetParam().biases,
+        auto dense1{new Dense{GetParam().weights, GetParam().biases, QUANTIZATION_PARAM,
                               QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
-        auto dense2{new Dense{GetParam().weights, GetParam().biases,
+        auto dense2{new Dense{GetParam().weights, GetParam().biases, QUANTIZATION_PARAM,
                               QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
         m_circuit = new Circuit{dense1, dense2};
         m_gc = new GarbledCircuit{m_circuit, 8};
@@ -124,6 +126,7 @@ TEST_P(TestTwoDense, EndtoEndCPU) {
     delete g_inputs;
 }
 
+#ifndef LABEL_TENSOR_USE_EIGEN //TODO: remove macro when Eigen operations in LT support CUDA
 TEST_P(TestSingleDense, CudaMove) {
     m_gc->cuda_move();
     auto g_dense{static_cast<GarbledDense*>(m_gc->get_garbled_layer().at(0))};
@@ -222,6 +225,7 @@ TEST_P(TestTwoDense, EndtoEndGPU) {
     delete g_inputs;
     m_gc->cuda_free_inputs(g_dev_inputs);
 }
+#endif // LABEL_TENSOR_USE_EIGEN
 
 namespace test_dense_layer {
 dense_params dp0 = {

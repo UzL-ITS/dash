@@ -82,7 +82,7 @@ void bench_dense_cpu(int runs, wandb_t q_const,
                     inputs_q.data(), inputs_q.get_dims());
 
                 auto circuit = new Circuit{new Dense{
-                    weights, biases, QuantizationMethod::SimpleQuant, q_const}};
+                    weights, biases, -1, QuantizationMethod::SimpleQuant, q_const}};
                 auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
                 int crt_base_size = circuit->infer_crt_base_size(inputs_q);
                 auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -143,7 +143,7 @@ void bench_conv2d_cpu(int runs, wandb_t q_const,
                 auto circuit = new Circuit{new Conv2d(
                     weights, bias, input_width, input_height, channel, filter,
                     filter_width, filter_height, stride_width, stride_height,
-                    QuantizationMethod::SimpleQuant, q_const)};
+                    -1, QuantizationMethod::SimpleQuant, q_const)};
                 auto q_acc = circuit->compute_q_acc(inputs, inputs_q, q_const);
                 int crt_base_size = circuit->infer_crt_base_size(inputs_q);
                 auto gc = new GarbledCircuit(circuit, crt_base_size);
@@ -265,35 +265,46 @@ void bench_sign_activation_cpu(int runs, wandb_t q_const,
 
 void bench_rescale_cpu(int runs, wandb_t q_const,
                        vector<size_t> dims, FILE* fpt) {
+    int crt_base_size = 8;
     for (auto dim : dims) {
-        for (int nr_threads = 1; nr_threads <= 16; ++nr_threads) {
-            printf("Rescale Layer (CPU), nr_threads: %d\n", nr_threads);
-            for (int run = 0; run < runs; ++run) {
-                auto inputs_q = init_inputs(dim_t{dim});
+        for(int l = 1; l <= 5; ++l) {
+            // Standard CRT base but with scaling factor at index 0
+            auto crt_base = util::sieve_of_eratosthenes<crt_val_t>(crt_base_size);
+            const crt_val_t scaling_factor = 1 << l;
+            crt_base.at(0) = scaling_factor;
 
-                auto circuit = new Circuit{new Rescale{1, inputs_q.get_dims()}};
-                int crt_base_size = 8;
+            // Standard MRS base for k=8, 100% accuracy
+            const vector<mrs_val_t> mrs_base= {98, 9, 8, 8, 7, 5};
+            for (int nr_threads = 1; nr_threads <= 16; ++nr_threads) {
+                printf("Rescale Layer (CPU), scaling factor: %d, nr_threads: %d\n", scaling_factor, nr_threads);
+                for (int run = 0; run < runs; ++run) {
+                    auto inputs_q = init_inputs(dim_t{dim});
 
-                auto gc = new GarbledCircuit(circuit, crt_base_size, 100.0F);
-                auto g_inputs{gc->garble_inputs(inputs_q)};
-                auto t1 = high_resolution_clock::now();
-                auto g_outputs{gc->cpu_evaluate(g_inputs, nr_threads)};
-                auto t2 = high_resolution_clock::now();
-                auto outputs{gc->decode_outputs(g_outputs)};
+                    const vector<crt_val_t> s = {scaling_factor};
+                    auto circuit = new Circuit{new Rescale{s, inputs_q.get_dims()}};
 
-                duration<double, std::milli> ms_double = t2 - t1;
+                    auto gc = new GarbledCircuit(circuit, crt_base, mrs_base);
+                    auto g_inputs{gc->garble_inputs(inputs_q)};
+                    auto t1 = high_resolution_clock::now();
+                    auto g_outputs{gc->cpu_evaluate(g_inputs, nr_threads)};
+                    auto t2 = high_resolution_clock::now();
+                    auto outputs{gc->decode_outputs(g_outputs)};
+                    // outputs.print();
 
-                fprintf(fpt, "CPU, %d, %d, %lu, %d, %f\n", nr_threads,
-                        crt_base_size, dim, run, ms_double.count());
+                    duration<double, std::milli> ms_double = t2 - t1;
 
-                // clean up
-                for (auto label : *g_inputs) {
-                    delete label;
+                    fprintf(fpt, "CPU, %d, %d, %lu, %d, %d, %f\n", nr_threads,
+                            crt_base_size, dim, l, run, ms_double.count());
+
+                    // clean up
+                    for (auto label : *g_inputs) {
+                        delete label;
+                    }
+                    delete g_inputs;
+
+                    delete circuit;
+                    delete gc;
                 }
-                delete g_inputs;
-
-                delete circuit;
-                delete gc;
             }
         }
     }
@@ -385,9 +396,9 @@ int main() {
     {
         std::string filename = path + date_string + "_rescaling.csv";
         fpt = fopen(filename.c_str(), "w+");
-        fprintf(fpt, "type, nr_threads, crt_base_size, dims, run, runtime\n");
+        fprintf(fpt, "type, nr_threads, crt_base_size, dims, l, run, runtime\n");
         wandb_t q_const = 0.0001;
-        vector<size_t> dims{128, 2048, 16384};
+        vector<size_t> dims {128, 256, 512, 1024, 2048, 4096, 8192, 16384};
         bench_rescale_cpu(runs, q_const, dims, fpt);
         fclose(fpt);
     }

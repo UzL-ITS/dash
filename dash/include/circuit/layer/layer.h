@@ -35,7 +35,9 @@ class Layer {
         flatten,
         sign,
         max_pool,
-        rescale
+        rescale,
+        max,
+        base_extension
     };
 
     Layer(dim_t input_dims, dim_t output_dims)

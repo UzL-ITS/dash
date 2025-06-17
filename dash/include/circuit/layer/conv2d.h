@@ -174,7 +174,7 @@ class Conv2d : public Layer {
            size_t input_width, size_t input_height, size_t channel,
            size_t filter, size_t filter_width, size_t filter_height,
            size_t stride_width, size_t stride_height,
-           QuantizationMethod q_method = QuantizationMethod::SimpleQuant,
+           int q_parameter, QuantizationMethod q_method = QuantizationMethod::SimpleQuant,
            wandb_t q_const = 10)
         : Layer(
               dim_t{input_width, input_height, channel},
@@ -182,16 +182,23 @@ class Conv2d : public Layer {
                     out_h(input_height, filter_height, stride_height), filter}),
           m_weights(weights),
           m_biases(biases) {
-        if (q_method == QuantizationMethod::SimpleQuant) {
+        if (q_method == QuantizationMethod::SimpleQuant) { // ignore q_parameter
             m_q_weights =
                 ScalarTensor<q_val_t>::quantize(weights, q_method, q_const);
             m_q_biases =
                 ScalarTensor<q_val_t>::quantize(biases, q_method, q_const);
-        } else {
+        } else if (q_method == QuantizationMethod::ScaleQuant) { // use q_parameter as l
             m_q_weights =
-                ScalarTensor<q_val_t>::quantize(weights, q_method, QL);
+                ScalarTensor<q_val_t>::quantize(weights, q_method, 1 << q_parameter);
             m_q_biases =
-                ScalarTensor<q_val_t>::quantize(biases, q_method, 2 * QL);
+                ScalarTensor<q_val_t>::quantize(biases, q_method, 1 << (2 * q_parameter));
+        } else if (q_method == QuantizationMethod::ScaleQuantPlus) { // use q_parameter as s
+            m_q_weights =
+                ScalarTensor<q_val_t>::quantize(weights, q_method, q_parameter);
+            m_q_biases =
+                ScalarTensor<q_val_t>::quantize(biases, q_method, q_parameter);
+        } else {
+            assert(false && "Unknown quantization method");
         }
         m_input_width = input_width;
         m_input_height = input_height;

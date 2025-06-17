@@ -6,6 +6,7 @@
 
 #define QUANTIZATION_CONSTANT 10
 #define QUANTIZATION_METHOD QuantizationMethod::SimpleQuant
+#define QUANTIZATION_PARAM -1
 
 #include "circuit/circuit.h"
 #include "circuit/layer/conv2d.h"
@@ -118,7 +119,7 @@ class TestSingleConv2d : public ::testing::TestWithParam<conv2d_params> {
             GetParam().input_height, GetParam().channel, GetParam().filter,
             GetParam().filter_width, GetParam().filter_height,
             GetParam().stride_width, GetParam().stride_height,
-            QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
+            QUANTIZATION_PARAM, QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
         m_circuit = new Circuit{conv2d};
         m_gc = new GarbledCircuit{m_circuit, 8};
     }
@@ -146,6 +147,7 @@ TEST_P(TestSingleConv2d, EndtoEndCPU) {
     delete g_inputs;
 }
 
+#ifndef LABEL_TENSOR_USE_EIGEN //TODO: remove macro when Eigen operations in LT support CUDA
 TEST_P(TestSingleConv2d, EndtoEndGPU) {
     auto cp = GetParam();
     m_gc->cuda_move();
@@ -214,13 +216,13 @@ TEST(TestTwoConv2d, EndtoEndGPU) {
     // construct circuit
     auto conv1{new Conv2d{weight_tensor, bias_tensor, input_width, input_height,
                           channel, filter, filter_width, filter_height,
-                          stride_width, stride_height, QUANTIZATION_METHOD,
-                          QUANTIZATION_CONSTANT}};
+                          stride_width, stride_height, QUANTIZATION_PARAM,
+                          QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
 
     auto conv2{new Conv2d{weight_tensor2, bias_tensor2, input_width2,
                           input_height2, channel2, filter2, filter_width2,
                           filter_height2, stride_width2, stride_height2,
-                          QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
+                          QUANTIZATION_PARAM, QUANTIZATION_METHOD, QUANTIZATION_CONSTANT}};
 
     auto circuit = new Circuit{conv1, conv2};
     auto gc = new GarbledCircuit(circuit, 8);
@@ -257,6 +259,7 @@ TEST(TestTwoConv2d, EndtoEndGPU) {
     delete circuit;
     delete gc;
 }
+#endif // LABEL_TENSOR_USE_EIGEN
 
 // dims: input_width x input_height x channel
 ScalarTensor<q_val_t> input1{{0, 1, 2, 3, 4, 5, 6, 7, 8}, dim_t{3, 3, 1}};

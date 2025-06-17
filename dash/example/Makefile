@@ -1,8 +1,9 @@
 IDIR = ../include
 ONNXDIR = ../onnx
-MAIN_INCLUDES = -I/usr/local/cuda/include -ldlib -lpthread -lcudart -lcuda -L/usr/local/cuda/lib64 `pkg-config --cflags --libs protobuf`
-CPPFLAGS = -I$(IDIR) -I$(ONNXDIR)
-ALL_CXXFLAGS = $(CXXFLAGS) $(CPPFLAGS) -msse4.2 -maes -fopenmp -std=c++17 -mrdrnd -I../lib
+EIGENDIR = /usr/include/eigen3
+MAIN_INCLUDES = -I/usr/local/cuda/include -ldlib -lpthread -lcudart -lcuda -L/usr/local/cuda/lib64 `pkg-config --cflags --libs protobuf` -lopenblas
+CPPFLAGS = -I$(IDIR) -I$(ONNXDIR) -I$(EIGENDIR)
+ALL_CXXFLAGS = $(CXXFLAGS) $(CPPFLAGS) -msse4.2 -maes -fopenmp -std=c++17 -mrdrnd -I../lib -Wno-unknown-pragmas #-DLABEL_TENSOR_USE_EIGEN -DEIGEN_USE_BLAS
 NVCC_FLAGS = -std=c++17
 OBJDIR = ./obj
 

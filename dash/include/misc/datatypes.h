@@ -4,6 +4,6 @@
 #include "misc/datatypes_c.h"
 
 typedef std::vector<size_t> dim_t;
-enum class QuantizationMethod { SimpleQuant, ScaleQuant };
+enum class QuantizationMethod { SimpleQuant, ScaleQuant, ScaleQuantPlus };
 
 #endif

@@ -3,6 +3,11 @@
 
 #include <immintrin.h>
 
+#ifdef LABEL_TENSOR_USE_EIGEN
+#include <Eigen/Dense>
+#include <unsupported/Eigen/CXX11/Tensor>
+#endif
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -61,6 +66,7 @@ class LabelSlice {
     crt_val_t get_color() const;
     size_t get_slice_size() const;
     slice_dim_t get_slice_dims() const;
+    size_t get_first_label_id_from_slice_dims() const;
     void print() const;
     void operator+=(const LabelSlice&);
     void operator-=(const LabelSlice&);
@@ -775,37 +781,6 @@ class LabelTensor {
 
     // Tensor operations
     static LabelTensor* matvecmul(const ScalarTensor<q_val_t>& m,
-                                  LabelTensor& l, int nr_threads) {
-        size_t input_dim = l.m_dims.at(0);
-        size_t output_dim = m.get_dims().at(0);
-        assert(m.get_dims().size() == 2 && "Dimension mismatch");
-        assert(l.m_dims.size() == 1 && "Dimension mismatch");
-
-        crt_val_t modulus = l.m_modulus;
-        size_t nr_comps{get_nr_comps(modulus)};
-
-        auto result = new LabelTensor{modulus, 0, dim_t{output_dim}};
-        auto c_comps = result->get_components();
-        auto b_comps = l.get_components();
-        auto a_ptr = m.data();
-#ifndef SGX
-#pragma omp parallel for num_threads(nr_threads)
-#endif
-        for (size_t j = 0; j < output_dim; ++j) {
-            auto a = a_ptr + j * input_dim;
-            auto c = c_comps + j * nr_comps;
-            for (size_t k = 0; k < input_dim; ++k) {
-                auto b = b_comps + k * nr_comps;
-                for (size_t i = 0; i < nr_comps; ++i) {
-                    c[i] = (c[i] + b[i] * a[k]) % modulus;
-                }
-            }
-        }
-        return result;
-    }
-
-    // Tensor operations
-    static LabelTensor* matvecmul_zero(const ScalarTensor<q_val_t>& m,
                                        LabelTensor& l, LabelTensor zero,
                                        int nr_threads) {
         size_t input_dim = l.m_dims.at(0);
@@ -843,39 +818,6 @@ class LabelTensor {
     }
 
     static LabelTensor* matvecmul_tf(const ScalarTensor<q_val_t>& m,
-                                          LabelTensor& l, size_t channel,
-                                          int nr_threads) {
-        size_t input_dim = l.m_dims.at(0);
-        size_t output_dim = m.get_dims().at(0);
-        size_t offset = input_dim / channel;
-        assert(m.get_dims().size() == 2 && "Dimension mismatch");
-        assert(l.m_dims.size() == 1 && "Dimension mismatch");
-
-        crt_val_t modulus = l.m_modulus;
-        size_t nr_comps{get_nr_comps(modulus)};
-
-        auto result = new LabelTensor{modulus, 0, dim_t{output_dim}};
-        auto c_comps = result->get_components();
-        auto b_comps = l.get_components();
-        auto a_ptr = m.data();
-#ifndef SGX
-#pragma omp parallel for num_threads(nr_threads)
-#endif
-        for (size_t j = 0; j < output_dim; ++j) {
-            auto c = c_comps + j * nr_comps;
-            auto a = a_ptr + j * input_dim;
-            for (size_t k = 0; k < input_dim; ++k) {
-                int input_idx = k / channel + (k % channel) * offset;
-                auto b = b_comps + input_idx * nr_comps;
-                for (size_t i = 0; i < nr_comps; ++i) {
-                    c[i] = (c[i] + b[i] * a[k]) % modulus;
-                }
-            }
-        }
-        return result;
-    }
-
-    static LabelTensor* matvecmul_zero_tf(const ScalarTensor<q_val_t>& m,
                                      LabelTensor& l, LabelTensor zero,
                                      size_t channel, int nr_threads) {
         size_t input_dim = l.m_dims.at(0);
@@ -911,82 +853,74 @@ class LabelTensor {
                 }
             }
         }
+
         return result;
     }
 
-    static LabelTensor* conv2d(LabelTensor& l, ScalarTensor<q_val_t>& weights,
-                               LabelTensor& bias_label, size_t input_width,
-                               size_t input_height, size_t channel,
-                               size_t filter, size_t filter_width,
-                               size_t filter_height, size_t stride_width,
-                               size_t stride_height, int nr_threads) {
-        size_t output_width = (input_width - filter_width) / stride_width + 1;
-        size_t output_height =
-            (input_height - filter_height) / stride_height + 1;
+#ifdef LABEL_TENSOR_USE_EIGEN
+//TODO: bring new zero_label feature to eigen
+static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m, LabelTensor &l, LabelTensor zero)
+{
+    assert(m.get_dims().size() == 2 && "Dimension mismatch");
+    assert(l.m_dims.size() == 1 && "Dimension mismatch");
 
-        size_t output_size = output_width * output_height;  // sizer per filter
-        size_t filter_size = filter_width * filter_height;
-        size_t input_size = input_width * input_height;
+    using GEMMResultType = double;
+    using MatrixXq = Eigen::Matrix<q_val_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    using MatrixXcrt = Eigen::Matrix<crt_val_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+    using MatrixXi = Eigen::Matrix<GEMMResultType, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
-        size_t nr_comps = l.get_nr_comps();
+    const size_t input_dim = l.m_dims.at(0);
+    const size_t output_dim = m.get_dims().at(0);
+    const crt_val_t modulus = l.m_modulus;
+    const size_t nr_comps = get_nr_comps(modulus);
 
-        dim_t dims{output_height, output_width, filter};
-        auto result = new LabelTensor{l.get_modulus(), 0, dims};
+    const auto eigen_a = Eigen::Map<MatrixXq>(m.data(), output_dim, input_dim);
+    const auto eigen_b = Eigen::Map<MatrixXcrt>(l.get_components(), input_dim, nr_comps);
 
-        crt_val_t* output = result->get_components();
-        crt_val_t* input = l.get_components();
-        crt_val_t modulus = l.get_modulus();
+    // Perform matrix multiplication
+    const MatrixXi eigen_c = (eigen_a.cast<GEMMResultType>() * eigen_b.cast<GEMMResultType>()).eval();
 
-        q_val_t* we = weights.data();
-        crt_val_t* bi = bias_label.get_components();
-#ifndef SGX
-#pragma omp parallel for collapse(4) num_threads(nr_threads)
-#endif
-        // applied on all label components
-        for (size_t m = 0; m < nr_comps; ++m) {
-            // for all filter
-            for (size_t v = 0; v < filter; ++v) {
-                // move filter along y-axis
-                for (size_t l = 0; l < output_height; ++l) {
-                    // move filter along x-axis
-                    for (size_t k = 0; k < output_width; ++k) {
-                        size_t output_idx = v * output_size * nr_comps +
-                                            l * output_width * nr_comps +
-                                            k * nr_comps + m;
-                        // scalar product over all input-channel...
-                        for (size_t w = 0; w < channel; ++w) {
-                            // ...along filter height and...
-                            for (size_t i = 0; i < filter_height; ++i) {
-                                // ...width
-                                for (size_t j = 0; j < filter_width; ++j) {
-                                    output[output_idx] =
-                                        (output[output_idx] +
-                                         we[v * filter_size * channel +
-                                            w * filter_size +
-                                            i * filter_height + j] *
-                                             input[w * input_size * nr_comps +
-                                                   i * input_width * nr_comps +
-                                                   j * nr_comps +
-                                                   k * stride_width * nr_comps +
-                                                   l * stride_height *
-                                                       input_width * nr_comps +
-                                                   m]) %
-                                        modulus;
-                                }
-                            }
-                        }
-                        // add bias to each output-channel
-                        output[output_idx] =
-                            (output[output_idx] + bi[v * nr_comps + m]) %
-                            modulus;
-                    }
-                }
+    // Apply modular reduction
+    const MatrixXcrt eigen_c_mod = eigen_c.unaryExpr([modulus](GEMMResultType x) {
+        return static_cast<crt_val_t>(static_cast<int64_t>(x) % modulus);
+    });
+
+    // Allocate memory for the result
+    auto result = std::make_unique<LabelTensor>(modulus, 0, dim_t{output_dim});
+    std::memcpy(result->get_components(), eigen_c_mod.data(), output_dim * nr_comps * sizeof(crt_val_t));
+
+    //TODO: IMPORTANT NOTE: This in insecure! Adding the zero label AFTER the matrix multiplication posibly leaks intermediate results.
+    // For each output label, check if all components are 0 mod modulus.
+    // If yes, add the entire zero label to that label (component-wise addition).
+    crt_val_t* res = result->get_components();
+    crt_val_t* z = zero.get_components();
+    for (size_t i = 0; i < output_dim; ++i)
+    {
+        bool all_zero = true;
+        for (size_t j = 0; j < nr_comps; ++j)
+        {
+            size_t pos = i * nr_comps + j;
+            if (util::modulo(res[pos], modulus) != 0)
+            {
+                all_zero = false;
+                break;
             }
         }
-        return result;
+        if (all_zero)
+        {
+            for (size_t j = 0; j < nr_comps; ++j)
+            {
+                size_t pos = i * nr_comps + j;
+                res[pos] = (res[pos] + z[j]) % modulus;
+            }
+        }
     }
 
-    static LabelTensor* conv2d_zero(LabelTensor& l, LabelTensor zero,
+    return result.release();
+}
+#endif // LABEL_TENSOR_USE_EIGEN
+
+    static LabelTensor* conv2d(LabelTensor& l, LabelTensor zero,
                                     ScalarTensor<q_val_t>& weights,
                                     LabelTensor& bias_label, size_t input_width,
                                     size_t input_height, size_t channel,
@@ -1063,76 +997,6 @@ class LabelTensor {
                         output[output_idx] =
                             (output[output_idx] + bi[v * nr_comps + m]) %
                             modulus;
-                    }
-                }
-            }
-        }
-        return result;
-    }
-
-    static LabelTensor* conv2d_static_bias_label(
-        LabelTensor& l, ScalarTensor<q_val_t>& weights,
-        const LabelSlice& bias_label, size_t input_width, size_t input_height,
-        size_t channel, size_t filter, size_t filter_width,
-        size_t filter_height, size_t stride_width, size_t stride_height) {
-        size_t output_width = (input_width - filter_width) / stride_width + 1;
-        size_t output_height =
-            (input_height - filter_height) / stride_height + 1;
-
-        size_t output_size = output_width * output_height;  // sizer per filter
-        size_t filter_size = filter_width * filter_height;
-        size_t input_size = input_width * input_height;
-
-        size_t nr_comps = l.get_nr_comps();
-
-        dim_t dims{output_height, output_width, filter};
-        auto result = new LabelTensor{l.get_modulus(), 0, dims};
-
-        crt_val_t* output = result->get_components();
-        crt_val_t* input = l.get_components();
-        crt_val_t modulus = l.get_modulus();
-
-        q_val_t* we = weights.data();
-        crt_val_t* bi = bias_label.get_components();
-#ifndef SGX
-#pragma omp parallel for collapse(4)
-#endif
-        // applied on all label components
-        for (size_t m = 0; m < nr_comps; ++m) {
-            // for all filter
-            for (size_t v = 0; v < filter; ++v) {
-                // move filter along y-axis
-                for (size_t l = 0; l < output_height; ++l) {
-                    // move filter along x-axis
-                    for (size_t k = 0; k < output_width; ++k) {
-                        size_t output_idx = v * output_size * nr_comps +
-                                            l * output_width * nr_comps +
-                                            k * nr_comps + m;
-                        // scalar product over all input-channel...
-                        for (size_t w = 0; w < channel; ++w) {
-                            // ...along filter height and...
-                            for (size_t i = 0; i < filter_height; ++i) {
-                                // ...width
-                                for (size_t j = 0; j < filter_width; ++j) {
-                                    output[output_idx] =
-                                        (output[output_idx] +
-                                         we[v * filter_size * channel +
-                                            w * filter_size +
-                                            i * filter_height + j] *
-                                             input[w * input_size * nr_comps +
-                                                   i * input_width * nr_comps +
-                                                   j * nr_comps +
-                                                   k * stride_width * nr_comps +
-                                                   l * stride_height *
-                                                       input_width * nr_comps +
-                                                   m]) %
-                                        modulus;
-                                }
-                            }
-                        }
-                        // add bias to each output-channel
-                        output[output_idx] =
-                            (output[output_idx] + bi[m]) % modulus;
                     }
                 }
             }
@@ -1221,12 +1085,301 @@ class LabelTensor {
         return result;
     }
 
+    LabelTensor im2col(size_t filter_height, size_t filter_width, size_t stride_height, size_t stride_width) const {
+        assert(m_dims.size() == 3 && "im2col: Tensor must be 3D");
+
+        const size_t input_height = m_dims[0];
+        const size_t input_width = m_dims[1];
+        const size_t channels = m_dims[2];
+        const size_t output_height = (input_height - filter_height) / stride_height + 1;
+        const size_t output_width = (input_width - filter_width) / stride_width + 1;
+        const dim_t output_dims = {filter_height * filter_width * channels, output_height * output_width};
+
+        LabelTensor result(m_modulus, 0, output_dims);
+
+        size_t output_idx = 0;
+        for (size_t h = 0; h < output_height; ++h) {
+            for (size_t w = 0; w < output_width; ++w) {
+                for (size_t c = 0; c < channels; ++c) {
+                    for (size_t fh = 0; fh < filter_height; ++fh) {
+                        for (size_t fw = 0; fw < filter_width; ++fw) {
+                            const size_t input_row = h * stride_height + fh;
+                            const size_t input_col = w * stride_width + fw;
+                            const size_t input_idx = (input_row * input_width + input_col) + c * input_width * input_height;
+                            for (size_t comp = 0; comp < m_nr_comps; ++comp) {
+                                result.get_components()[output_idx * m_nr_comps + comp] = m_components[input_idx * m_nr_comps + comp];
+                            }
+                            output_idx++;
+                        }
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+    LabelTensor im2row(size_t filter_height, size_t filter_width, size_t stride_height, size_t stride_width) const {
+        assert(m_dims.size() == 3 && "im2row: Tensor must be 3D");
+
+        const size_t input_height = m_dims[0];
+        const size_t input_width = m_dims[1];
+        const size_t channels = m_dims[2];
+        const size_t output_height = (input_height - filter_height) / stride_height + 1;
+        const size_t output_width = (input_width - filter_width) / stride_width + 1;
+        const dim_t output_dims = {output_height * output_width, filter_height * filter_width * channels};
+
+        LabelTensor result(m_modulus, 0, output_dims);
+
+        size_t output_idx = 0;
+        for (size_t c = 0; c < channels; ++c) {
+            for (size_t h = 0; h < output_height; ++h) {
+                for (size_t w = 0; w < output_width; ++w) {
+                    for (size_t fh = 0; fh < filter_height; ++fh) {
+                        for (size_t fw = 0; fw < filter_width; ++fw) {
+                            const size_t input_row = h * stride_height + fh;
+                            const size_t input_col = w * stride_width + fw;
+                            const size_t input_idx = (input_row * input_width + input_col) + c * input_width * input_height;
+                            for (size_t comp = 0; comp < m_nr_comps; ++comp) {
+                                result.get_components()[output_idx * m_nr_comps + comp] = m_components[input_idx * m_nr_comps + comp];
+                            }
+                            output_idx++;
+                        }
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+// TODO: Fix, then integrate in garbled_conv2d.h (cf. maurerf/sprint on GitHub)
+#ifdef LABEL_TENSOR_USE_EIGEN
+    static LabelTensor *conv2d_eigen(LabelTensor &l, ScalarTensor<q_val_t> &weights,
+                                     LabelTensor &bias_label, size_t input_width,
+                                     size_t input_height, size_t channel,
+                                     size_t filter, size_t filter_width,
+                                     size_t filter_height, size_t stride_width,
+                                     size_t stride_height, int nr_threads)
+    {
+        // Aliases for Eigen matrices.
+        typedef Eigen::Matrix<q_val_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXq;
+        typedef Eigen::Matrix<crt_val_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXcrt;
+        typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXd;
+
+        // Compute output dimensions.
+        const size_t output_width = (input_width - filter_width) / stride_width + 1;
+        const size_t output_height = (input_height - filter_height) / stride_height + 1;
+        const size_t output_size = output_width * output_height;
+        const dim_t output_dims = {output_height, output_width, filter};
+        const size_t filter_size = filter_width * filter_height;
+        const crt_val_t modulus = l.get_modulus();
+        const size_t nr_comps = l.get_nr_comps();
+
+        // --- Step 1: im2row transformation ---
+        // The im2row function produces data in an interleaved layout.
+        // Logical dimensions: [output_size, filter_size * channel, nr_comps]
+        const LabelTensor im2row_result = l.im2row(filter_height, filter_width, stride_height, stride_width);
+        const auto im2row_ptr = im2row_result.get_components();
+
+        // There are filter_size * channel patch elements.
+        const size_t num_patch_elements = filter_size * channel;
+
+        // --- Step 2: Map the weights ---
+        // Weights are stored as a (filter x (filter_size * channel)) dense matrix.
+        const auto weights_ptr = weights.data();
+        const MatrixXq eigen_weights = Eigen::Map<const MatrixXq>(
+            weights_ptr,
+            static_cast<Eigen::DenseIndex>(filter),
+            static_cast<Eigen::DenseIndex>(num_patch_elements));
+
+        // --- Step 3: De-interleave im2row data into a contiguous matrix ---
+        // We want to create a matrix big_im2row of size:
+        //   Rows = num_patch_elements,
+        //   Columns = output_size * nr_comps.
+        MatrixXcrt big_im2row(static_cast<Eigen::DenseIndex>(num_patch_elements),
+                              static_cast<Eigen::DenseIndex>(output_size * nr_comps));
+
+// Copy from the interleaved layout to contiguous storage.
+// For each output index i (0 <= i < output_size) and patch element j,
+// the interleaved data is stored at:
+//   offset = (i * num_patch_elements + j) * nr_comps
+// We copy each component k into column (i * nr_comps + k) of the contiguous matrix.
+#pragma omp parallel for collapse(2) num_threads(nr_threads)
+        for (size_t i = 0; i < output_size; ++i)
+        {
+            for (size_t j = 0; j < num_patch_elements; ++j)
+            {
+                size_t base = (i * num_patch_elements + j) * nr_comps;
+                for (size_t k = 0; k < nr_comps; ++k)
+                {
+                    // Destination column index = i * nr_comps + k.
+                    big_im2row(j, i * nr_comps + k) = im2row_ptr[base + k];
+                }
+            }
+        }
+
+        // --- Step 4: Perform GEMM in double precision ---
+        // Multiply weights [filter x num_patch_elements] by big_im2row [num_patch_elements x (output_size * nr_comps)]
+        MatrixXd eigen_c_float = (eigen_weights.template cast<double>() *
+                                  big_im2row.template cast<double>())
+                                     .eval();
+
+        // --- Step 5: Add bias ---
+        // bias_label holds one bias per component (nr_comps elements)
+        const auto bias_ptr = bias_label.get_components();
+        for (int i = 0; i < eigen_c_float.rows(); ++i)
+        {
+            for (int j = 0; j < eigen_c_float.cols(); ++j)
+            {
+                // Determine the component: column j corresponds to component = j % nr_comps.
+                eigen_c_float(i, j) += static_cast<double>(bias_ptr[j % nr_comps]);
+            }
+        }
+
+        // --- Step 6: Modular reduction and conversion ---
+        MatrixXcrt eigen_c_mod = eigen_c_float.unaryExpr([modulus](double x)
+                                                         { return static_cast<crt_val_t>(static_cast<int64_t>(x) % modulus); });
+
+        // --- Step 7: Rearrange result into interleaved output format ---
+        // The GEMM result is in eigen_c_mod with dimensions [filter, output_size * nr_comps] in row-major order.
+        // We want to store the final output in a LabelTensor with interleaved format:
+        //   For each filter i, output index j, and component k:
+        //       result_ptr[(i * output_size + j) * nr_comps + k] = eigen_c_mod(i, j * nr_comps + k)
+        auto result = new LabelTensor(modulus, 0, output_dims);
+        auto result_ptr = result->get_components();
+        for (size_t i = 0; i < static_cast<size_t>(eigen_c_mod.rows()); ++i)
+        {
+            for (size_t j = 0; j < output_size; ++j)
+            {
+                for (size_t k = 0; k < nr_comps; ++k)
+                {
+                    result_ptr[(i * output_size + j) * nr_comps + k] =
+                        static_cast<crt_val_t>(eigen_c_mod(i, j * nr_comps + k));
+                }
+            }
+        }
+
+        //TODO: add masking, cf. matvecmul_eigen (must also add zero label as function parameter)
+
+        return result;
+    }
+
+    static LabelTensor *conv2d_eigen_static_bias_label(
+        LabelTensor &l, ScalarTensor<q_val_t> &weights,
+        const LabelSlice &bias_label, size_t input_width, size_t input_height,
+        size_t channel, size_t filter, size_t filter_width,
+        size_t filter_height, size_t stride_width, size_t stride_height)
+    {
+        // Aliases for Eigen matrices.
+        typedef Eigen::Matrix<q_val_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXq;
+        typedef Eigen::Matrix<crt_val_t, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXcrt;
+        typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXd;
+
+        // Compute output dimensions.
+        const size_t output_width = (input_width - filter_width) / stride_width + 1;
+        const size_t output_height = (input_height - filter_height) / stride_height + 1;
+        const size_t output_size = output_width * output_height;
+        const dim_t output_dims = {output_height, output_width, filter};
+        const size_t filter_size = filter_width * filter_height;
+        const crt_val_t modulus = l.get_modulus();
+        const size_t nr_comps = l.get_nr_comps();
+
+        // --- Step 1: im2row transformation ---
+        // The im2row function produces data in an interleaved layout.
+        // Logical dimensions: [output_size, filter_size * channel, nr_comps]
+        const LabelTensor im2row_result = l.im2row(filter_height, filter_width, stride_height, stride_width);
+        const auto im2row_ptr = im2row_result.get_components();
+
+        // There are filter_size * channel patch elements.
+        const size_t num_patch_elements = filter_size * channel;
+
+        // --- Step 2: Map the weights ---
+        // Weights are stored as a (filter x (filter_size * channel)) dense matrix.
+        const auto weights_ptr = weights.data();
+        const MatrixXq eigen_weights = Eigen::Map<const MatrixXq>(
+            weights_ptr,
+            static_cast<Eigen::DenseIndex>(filter),
+            static_cast<Eigen::DenseIndex>(num_patch_elements));
+
+        // --- Step 3: De-interleave im2row data into a contiguous matrix ---
+        // We want to create a matrix big_im2row of size:
+        //   Rows = num_patch_elements,
+        //   Columns = output_size * nr_comps.
+        MatrixXcrt big_im2row(static_cast<Eigen::DenseIndex>(num_patch_elements),
+                              static_cast<Eigen::DenseIndex>(output_size * nr_comps));
+
+// Copy from the interleaved layout to contiguous storage.
+// For each output index i (0 <= i < output_size) and patch element j,
+// the interleaved data is stored at:
+//   offset = (i * num_patch_elements + j) * nr_comps
+// We copy each component k into column (i * nr_comps + k) of the contiguous matrix.
+        for (size_t i = 0; i < output_size; ++i)
+        {
+            for (size_t j = 0; j < num_patch_elements; ++j)
+            {
+                size_t base = (i * num_patch_elements + j) * nr_comps;
+                for (size_t k = 0; k < nr_comps; ++k)
+                {
+                    // Destination column index = i * nr_comps + k.
+                    big_im2row(j, i * nr_comps + k) = im2row_ptr[base + k];
+                }
+            }
+        }
+
+        // --- Step 4: Perform GEMM in double precision ---
+        // Multiply weights [filter x num_patch_elements] by big_im2row [num_patch_elements x (output_size * nr_comps)]
+        MatrixXd eigen_c_float = (eigen_weights.template cast<double>() *
+                                  big_im2row.template cast<double>())
+                                     .eval();
+
+        // --- Step 5: Add bias ---
+        // bias_label holds one bias per component (nr_comps elements)
+        const auto bias_ptr = bias_label.get_components();
+        for (int i = 0; i < eigen_c_float.rows(); ++i)
+        {
+            for (int j = 0; j < eigen_c_float.cols(); ++j)
+            {
+                // Determine the component: column j corresponds to component = j % nr_comps.
+                eigen_c_float(i, j) += static_cast<double>(bias_ptr[j % nr_comps]);
+            }
+        }
+
+        // --- Step 6: Modular reduction and conversion ---
+        MatrixXcrt eigen_c_mod = eigen_c_float.unaryExpr([modulus](double x)
+                                                         { return static_cast<crt_val_t>(static_cast<int64_t>(x) % modulus); });
+
+        // --- Step 7: Rearrange result into interleaved output format ---
+        // The GEMM result is in eigen_c_mod with dimensions [filter, output_size * nr_comps] in row-major order.
+        // We want to store the final output in a LabelTensor with interleaved format:
+        //   For each filter i, output index j, and component k:
+        //       result_ptr[(i * output_size + j) * nr_comps + k] = eigen_c_mod(i, j * nr_comps + k)
+        auto result = new LabelTensor(modulus, 0, output_dims);
+        auto result_ptr = result->get_components();
+        for (size_t i = 0; i < static_cast<size_t>(eigen_c_mod.rows()); ++i)
+        {
+            for (size_t j = 0; j < output_size; ++j)
+            {
+                for (size_t k = 0; k < nr_comps; ++k)
+                {
+                    result_ptr[(i * output_size + j) * nr_comps + k] =
+                        static_cast<crt_val_t>(eigen_c_mod(i, j * nr_comps + k));
+                }
+            }
+        }
+
+        //TODO: add masking, cf. matvecmul_eigen (must also add zero label as function parameter)
+
+        return result;
+    }
+#endif // LABEL_TENSOR_USE_EIGEN
+
     crt_val_t get_modulus() const { return m_modulus; }
     void set_modulus(crt_val_t modulus) { m_modulus = modulus; }
     size_t get_nr_comps() const { return m_nr_comps; }
     dim_t get_dims() const { return m_dims; }
     void flatten() { m_dims = dim_t{m_nr_label}; }
-    crt_val_t* get_components(size_t idx = 0) {
+    crt_val_t* get_components(size_t idx = 0) const {
         return &m_components[idx * m_nr_comps];
     }
     size_t size() const { return m_size; }
@@ -1245,6 +1398,19 @@ class LabelTensor {
         assert(v.get_modulus() == m_modulus && "Modulus mismatch");
         std::memcpy(&m_components[idx * m_nr_comps], v.get_components(),
                     sizeof(crt_val_t) * m_nr_comps);
+    }
+    void set_label(LabelSlice v, vector<size_t> indices) {
+        assert(indices.size() <= m_dims.size() && "Wrong number of indices");
+        assert(v.get_modulus() == m_modulus && "Modulus mismatch");
+
+        //TODO: implement for arbitrary dims
+        const auto scalar_idx = indices.at(0) * m_dims.at(1) * m_dims.at(2) +
+            indices.at(1) * m_dims.at(2) +
+            indices.at(2);
+
+        //std::cout << "indices: " << indices.at(0) << indices.at(1) << indices.at(2) << "; idx: " << scalar_idx << std::endl;
+
+        std::memcpy(&m_components[scalar_idx * m_nr_comps], v.get_components(), sizeof(crt_val_t) * m_nr_comps);
     }
     void set_offset_value(crt_val_t value = 1) {
         for (size_t i = 0; i < m_nr_label; ++i) {
@@ -1329,7 +1495,7 @@ class LabelTensor {
         printf("\n");
     }
 
-    void print() {
+    void print() const {
         for (size_t i = 0; i < m_nr_label; i++) {
             for (size_t j = 0; j < m_nr_comps; j++) {
                 printf("%d ", m_components[i * m_nr_comps + j]);
@@ -1457,21 +1623,41 @@ crt_val_t* LabelSlice::get_components() const {
     assert(m_slice_size == 1 &&
            "Slice size greater than 0, label does not lie consecutive in "
            "memory");
-    return m_tensor.get_components(m_label_ids.at(0));
+    // if label_ids are set, use them to get the first component pointer
+    if (!m_label_ids.empty()) {
+        return m_tensor.get_components(m_label_ids.at(0));
+    }
+    // if slice_dims are set and slice+tensor are 3D, use them to get the first component pointer
+    if (m_slice_dims.size() == 3 && m_tensor.get_dims().size() == 3) {
+        return m_tensor.get_components(get_first_label_id_from_slice_dims());
+    }
+    throw std::runtime_error("LabelSlice: No label_ids or 3D slice_dims set");
 }
 
 __uint128_t* LabelSlice::get_compressed() const {
     assert(m_slice_size == 1 &&
            "Slice size greater than 0, label does not lie consecutive in "
            "memory");
-    return m_tensor.get_compressed(m_label_ids.at(0));
+    if (!m_label_ids.empty()) {
+        return m_tensor.get_compressed(m_label_ids.at(0));
+    }
+    if (m_slice_dims.size() == 3 && m_tensor.get_dims().size() == 3) {
+        return m_tensor.get_compressed(get_first_label_id_from_slice_dims());
+    }
+    throw std::runtime_error("LabelSlice: No label_ids or 3D slice_dims set");
 }
 
 __uint128_t* LabelSlice::get_hashed() const {
     assert(m_slice_size == 1 &&
            "Slice size greater than 0, label does not lie consecutive in "
            "memory");
-    return m_tensor.get_hashed(m_label_ids.at(0));
+    if (!m_label_ids.empty()) {
+        return m_tensor.get_hashed(m_label_ids.at(0));
+    }
+    if (m_slice_dims.size() == 3 && m_tensor.get_dims().size() == 3) {
+        return m_tensor.get_hashed(get_first_label_id_from_slice_dims());
+    }
+    throw std::runtime_error("LabelSlice: No label_ids or 3D slice_dims set");
 }
 
 crt_val_t LabelSlice::get_color() const {
@@ -1484,6 +1670,13 @@ crt_val_t LabelSlice::get_color() const {
 size_t LabelSlice::get_slice_size() const { return m_slice_size; }
 
 slice_dim_t LabelSlice::get_slice_dims() const { return m_slice_dims; }
+
+size_t LabelSlice::get_first_label_id_from_slice_dims() const {
+    assert(m_slice_dims.size() == 3 && m_tensor.get_dims().size() == 3 && "Function not implemented for non-3D tensors");
+    return  m_slice_dims.at(0).first * m_tensor.get_dims().at(1) * m_tensor.get_dims().at(2) +
+            m_slice_dims.at(1).first * m_tensor.get_dims().at(2) +
+            m_slice_dims.at(2).first;
+}
 
 // Basic Operations
 void LabelSlice::operator+=(const LabelSlice& l) {
@@ -1515,7 +1708,9 @@ void LabelSlice::operator-=(const LabelSlice& l) {
 }
 
 void LabelSlice::operator*=(const q_val_t c) {
-    for (auto comp : *this) {
+    // for (auto comp : *this) { //TODO: fix iterator, re-enable here
+    for (size_t j = 0; j < get_slice_size(); ++j) {
+        crt_val_t* comp = m_tensor.get_components(m_label_ids[j]);
         for (size_t i = 0; i < get_nr_comps(); ++i) {
             comp[i] = util::modulo<q_val_t>((comp[i] * c), get_modulus());
         }

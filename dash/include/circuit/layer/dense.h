@@ -27,7 +27,7 @@ class Dense : public Layer {
     wandb_t m_q_const;
 
    public:
-    Dense(ScalarTensor<wandb_t> weights, ScalarTensor<wandb_t> biases,
+    Dense(ScalarTensor<wandb_t> weights, ScalarTensor<wandb_t> biases, int q_parameter,
           QuantizationMethod q_method = QuantizationMethod::SimpleQuant,
           wandb_t q_const = 10, int channel_tf = 0)
         : Layer(dim_t{weights.get_dims().at(1)},
@@ -38,17 +38,25 @@ class Dense : public Layer {
         assert(m_weights.get_dims()[0] == m_biases.get_dims()[0] &&
                "Weights and biases dimensions do not match");
 
-        if (q_method == QuantizationMethod::SimpleQuant) {
+        if (q_method == QuantizationMethod::SimpleQuant) { // ignore q_parameter
             m_q_weights =
                 ScalarTensor<q_val_t>::quantize(weights, q_method, q_const);
             m_q_biases =
                 ScalarTensor<q_val_t>::quantize(biases, q_method, q_const);
-        } else {
+        } else if (q_method == QuantizationMethod::ScaleQuant) { // use q_parameter as l
             m_q_weights =
-                ScalarTensor<q_val_t>::quantize(weights, q_method, QL);
+                ScalarTensor<q_val_t>::quantize(weights, q_method, 1 << q_parameter);
             m_q_biases =
-                ScalarTensor<q_val_t>::quantize(biases, q_method, 2 * QL);
+                ScalarTensor<q_val_t>::quantize(biases, q_method, 1 << (2 * q_parameter));
+        } else if (q_method == QuantizationMethod::ScaleQuantPlus) { // use q_parameter as s
+            m_q_weights =
+                ScalarTensor<q_val_t>::quantize(weights, q_method, q_parameter);
+            m_q_biases =
+                ScalarTensor<q_val_t>::quantize(biases, q_method, q_parameter);
+        } else {
+            assert(false && "Unknown quantization method");
         }
+        
         m_q_method = q_method;
         m_q_const = q_const;
         m_min_plain_q_val = std::min(m_q_weights.min(), m_q_biases.min());
