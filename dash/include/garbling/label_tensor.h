@@ -1221,17 +1221,26 @@ static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m,
                                         input + input_idx * nr_comps, nr_comps);
                                     acc = (acc.array() + (in_vec * wei).array()).matrix();
                                 }
-                                
-                                for (size_t r = 0; r < nr_comps; r++)
+
+                                // 16-bit residues require *more* frequent modular reduction.
+                                if constexpr (sizeof(crt_val_t) < 4)
                                 {
-                                    acc(r) %= modulus;
+                                    for (size_t r = 0; r < nr_comps; r++)
+                                    {
+                                        acc(r) %= modulus;
+                                    }
                                 }
                             }
                         }
-                        // for (size_t r = 0; r < nr_comps; r++)
-                        // {
-                        //     acc(r) %= modulus;
-                        // }
+
+                        // 32-bit residues require *less* frequent modular reduction.
+                        if constexpr (sizeof(crt_val_t) >= 4)
+                        {
+                            for (size_t r = 0; r < nr_comps; r++)
+                            {
+                                acc(r) %= modulus;
+                            }
+                        }
                     }
 
                     const Eigen::Map<const Eigen::Matrix<crt_val_t, Eigen::Dynamic, 1>> bias_vec(
@@ -1390,7 +1399,7 @@ static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m,
     static inline void init_rand(crt_val_t* vec, crt_val_t modulus,
                                  size_t nr_comps) {
         if constexpr (sizeof(crt_val_t) == 2) {
-            const crt_val_t max_value = (static_cast<crt_val_t>(1) << 16) - 1;
+            const int max_value = pow(2, sizeof(__uint128_t)) - 1;
             for (size_t i = 0; i < nr_comps; ++i) {
                 do {
                     while (!_rdrand16_step(reinterpret_cast<uint16_t*>(&vec[i]))) {
@@ -1399,7 +1408,7 @@ static LabelTensor *matvecmul_eigen(const ScalarTensor<q_val_t> &m,
                 vec[i] = util::modulo(vec[i], modulus);
             }
         } else if constexpr (sizeof(crt_val_t) == 4) {
-            const crt_val_t max_value = (static_cast<crt_val_t>(1) << 32) - 1;
+            const long max_value = pow(2, 2 * sizeof(__uint128_t)) - 1;
             for (size_t i = 0; i < nr_comps; ++i) {
                 do {
                     while (!_rdrand32_step(reinterpret_cast<unsigned int*>(&vec[i]))) {

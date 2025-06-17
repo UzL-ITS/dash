@@ -26,7 +26,7 @@
 #define WANDB_VAL_MAX FLT_MAX
 #define WANDB_VAL_MIN FLT_MIN
 
-// TODO: this is only used in legacy Enclave code, deploy Circuit::get_l() there, too
+// TODO: this is only used in legacy Enclave code
 #define QL 5
 
 typedef long long q_val_t;  // V

@@ -311,8 +311,7 @@ class Conv2d : public Layer {
     LayerType get_type() const override { return LayerType::conv2d; }
 
     ScalarTensor<wandb_t>& get_weights() {
-        size_t size = m_filter_height * m_filter_width * m_channel * m_filter;
-        assert(m_weights.size() == size && "Weights not properly initialized");
+        assert(m_weights.size() == m_filter_height * m_filter_width * m_channel * m_filter && "Weights not properly initialized");
         return m_weights;
     }
 
@@ -323,8 +322,7 @@ class Conv2d : public Layer {
     }
 
     ScalarTensor<q_val_t>& get_q_weights() {
-        size_t size = m_filter_height * m_filter_width * m_channel * m_filter;
-        assert(m_q_weights.size() == size &&
+        assert(m_q_weights.size() == m_filter_height * m_filter_width * m_channel * m_filter &&
                "Quantized and encoded weights not properly initialized");
         return m_q_weights;
     }
