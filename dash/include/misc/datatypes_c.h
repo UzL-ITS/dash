@@ -26,11 +26,11 @@
 #define WANDB_VAL_MAX FLT_MAX
 #define WANDB_VAL_MIN FLT_MIN
 
-// TODO: this is only used in legacy Enclave code, deploy Circuit::get_l() there, too
+// TODO: this is only used in legacy Enclave code
 #define QL 5
 
 typedef long long q_val_t;  // V
-typedef int16_t crt_val_t;  // T
+typedef int16_t crt_val_t;  // T // Note: If you change this, you may need to adjust modular reductions in linear LabelTensor operations.
 typedef int16_t mrs_val_t;  // U
 typedef float wandb_t;  // do not change without modifieng the onnx model loader
 

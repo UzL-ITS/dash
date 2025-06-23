@@ -469,26 +469,26 @@ class ScalarTensor {
                "ScaleQuant(+) requires a quantization constant of type int.");
         ScalarTensor<T> result{values.get_dims()};
         for (size_t i = 0; i < values.size(); ++i) {
-            result.push_back(values.at(i) * s);
+            result.push_back(std::llround(values.at(i) * s));
         }
         return result;
     }
 
-    static ScalarTensor<T> rescale(ScalarTensor<q_val_t>& values, int l) {
+    static ScalarTensor<T> rescale(ScalarTensor<q_val_t>& values, crt_val_t scaling_param, bool legacy_scaling = false) { // TODO: better solution than boolean
         ScalarTensor<T> result{values.get_dims()};
-        for (size_t i = 0; i < values.size(); ++i) {
-            // imitate rounding behaviour of garbled rescaling
-            result.push_back(std::ceil(values.at(i) * std::pow(2, -l)));
+        if (legacy_scaling) {
+            for (size_t i = 0; i < values.size(); ++i) {
+                // imitate rounding behaviour of garbled rescaling
+                result.push_back(std::ceil(values.at(i) * std::pow(2, -scaling_param)));
+            }
         }
-        return result;
-    }
+        else {
+            for (size_t i = 0; i < values.size(); ++i) {
+                // imitate rounding behaviour of garbled rescaling
+                result.push_back(std::ceil(static_cast<double>(values.at(i)) / scaling_param));
+            }
+        }
 
-    static ScalarTensor<T> rescale(ScalarTensor<q_val_t>& values, crt_val_t s) {
-        ScalarTensor<T> result{values.get_dims()};
-        for (size_t i = 0; i < values.size(); ++i) {
-            // imitate rounding behaviour of garbled rescaling
-            result.push_back(std::floor(static_cast<double>(values.at(i)) / s));
-        }
         return result;
     }
 
