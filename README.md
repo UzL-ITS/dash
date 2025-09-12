@@ -56,10 +56,12 @@ jupyter nbconvert --execute --inplace train_pytorch.ipynb
 ```
 7. To run the example or the benchmarks change to the corresponding directory, run the Makefile `make release` and execute the binary `./main`. If you want to run an example with SGX, use `make SGX_PRERELEASE=1 SGX_DEBUG=0`to build the SGX enclave and the binary. The results can be visusalized with evaluation.ipynb in the `benchmarks` folder.
 
-## Paper
-For a detailed description of the framework, please refer to our paper:
+## Papers
+For a detailed description of the framework, please refer to our papers:
 
 Jonas Sander, Sebastian Berndt, Ida Bruhns and Thomas Eisenbarth. 2025. **Dash: Accelerating Distributed Private Convolutional Neural Network Inference with Arithmetic Garbled Circuits.** IACR Transactions on Cryptographic Hardware and Embedded Systems, 2025(1), 420-449. \[[Link](https://tches.iacr.org/index.php/TCHES/article/view/11935)\] \[[DOI](https://doi.org/10.46586/tches.v2025.i1.420-449)\]
+
+Felix Maurer, Jonas Sander and Thomas Eisenbarth. 2025. **ReDASH: Fast and efficient Scaling in Arithmetic Garbled Circuits for Secure Outsourced Inference.** arXiv preprint arXiv:2506.14489. \[[Link](https://arxiv.org/abs/2506.14489)\] \[[DOI](https://doi.org/10.48550/arXiv.2506.14489)\] (accepted at SiMLA 2025)
 
 ## References
 [1] Ball, Marshall, Tal Malkin, and Mike Rosulek. "Garbling gadgets for boolean and arithmetic circuits." Proceedings of the 2016 ACM SIGSAC Conference on Computer and Communications Security. 2016.
